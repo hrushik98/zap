@@ -5,14 +5,26 @@ Audio processing service
 import os
 import asyncio
 from typing import List, Optional
-from pydub import AudioSegment
-from pydub.effects import normalize
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Try to import audio processing libraries, handle gracefully if not available
+try:
+    from pydub import AudioSegment
+    from pydub.effects import normalize
+    AUDIO_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Audio processing not available: {str(e)}")
+    AUDIO_AVAILABLE = False
+    AudioSegment = None
+    normalize = None
+
 class AudioService:
     """Service for audio processing operations"""
+    
+    def __init__(self):
+        self.audio_available = AUDIO_AVAILABLE
     
     async def convert_audio(
         self, 
@@ -25,6 +37,10 @@ class AudioService:
         """
         Convert audio file to different format
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)
@@ -62,6 +78,10 @@ class AudioService:
         """
         Trim audio file to specified time range
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)
@@ -90,6 +110,10 @@ class AudioService:
         """
         Merge multiple audio files into one
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             if not input_paths:
                 return False
@@ -120,6 +144,10 @@ class AudioService:
         """
         Adjust volume of audio file (volume_change in dB)
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)
@@ -144,6 +172,10 @@ class AudioService:
         """
         Normalize audio levels
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)
@@ -174,6 +206,10 @@ class AudioService:
         """
         Add fade in/out effects to audio
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)
@@ -202,6 +238,10 @@ class AudioService:
         """
         Change playback speed of audio
         """
+        if not self.audio_available:
+            logger.error("Audio processing not available")
+            return False
+            
         try:
             # Load audio file
             audio = AudioSegment.from_file(input_path)

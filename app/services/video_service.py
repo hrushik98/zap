@@ -5,13 +5,25 @@ Video processing service
 import os
 import asyncio
 from typing import Optional
-from moviepy.editor import VideoFileClip, concatenate_videoclips
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Try to import video processing libraries, handle gracefully if not available
+try:
+    from moviepy.editor import VideoFileClip, concatenate_videoclips
+    VIDEO_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Video processing not available: {str(e)}")
+    VIDEO_AVAILABLE = False
+    VideoFileClip = None
+    concatenate_videoclips = None
+
 class VideoService:
     """Service for video processing operations"""
+    
+    def __init__(self):
+        self.video_available = VIDEO_AVAILABLE
     
     async def convert_video(
         self, 
@@ -24,6 +36,10 @@ class VideoService:
         """
         Convert video file to different format
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             # Load video
             video = VideoFileClip(input_path)
@@ -68,6 +84,10 @@ class VideoService:
         """
         Compress video file
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             # Load video
             video = VideoFileClip(input_path)
@@ -121,6 +141,10 @@ class VideoService:
         """
         Trim video to specified time range
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             # Load video
             video = VideoFileClip(input_path)
@@ -156,6 +180,10 @@ class VideoService:
         """
         Merge multiple video files
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             if not input_paths:
                 return False
@@ -201,6 +229,10 @@ class VideoService:
         """
         Convert video to GIF
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             # Load video
             video = VideoFileClip(input_path)
@@ -235,6 +267,10 @@ class VideoService:
         """
         Extract audio from video
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             # Load video
             video = VideoFileClip(input_path)
@@ -267,6 +303,10 @@ class VideoService:
         """
         Add text watermark to video
         """
+        if not self.video_available:
+            logger.error("Video processing not available")
+            return False
+            
         try:
             from moviepy.editor import TextClip, CompositeVideoClip
             

@@ -5,23 +5,56 @@ Image processing service
 import os
 import asyncio
 from typing import Optional
-from PIL import Image, ImageEnhance, ImageFilter
-import cv2
-import numpy as np
-from rembg import remove, new_session
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Try to import image processing libraries, handle gracefully if not available
+try:
+    from PIL import Image, ImageEnhance, ImageFilter
+    PIL_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"PIL not available: {str(e)}")
+    PIL_AVAILABLE = False
+    Image = None
+    ImageEnhance = None
+    ImageFilter = None
+
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"OpenCV not available: {str(e)}")
+    CV2_AVAILABLE = False
+    cv2 = None
+    np = None
+
+try:
+    from rembg import remove, new_session
+    REMBG_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Background removal not available: {str(e)}")
+    REMBG_AVAILABLE = False
+    remove = None
+    new_session = None
 
 class ImageService:
     """Service for image processing operations"""
     
     def __init__(self):
         # Initialize background removal session
-        try:
-            self.bg_removal_session = new_session('u2net')
-        except Exception as e:
-            logger.warning(f"Could not initialize background removal: {str(e)}")
+        self.pil_available = PIL_AVAILABLE
+        self.cv2_available = CV2_AVAILABLE
+        self.rembg_available = REMBG_AVAILABLE
+        
+        if self.rembg_available:
+            try:
+                self.bg_removal_session = new_session('u2net')
+            except Exception as e:
+                logger.warning(f"Could not initialize background removal: {str(e)}")
+                self.bg_removal_session = None
+        else:
             self.bg_removal_session = None
     
     async def convert_image(
@@ -34,6 +67,10 @@ class ImageService:
         """
         Convert image to different format
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image conversion")
+            return False
+            
         try:
             # Open image
             with Image.open(input_path) as img:
@@ -75,6 +112,10 @@ class ImageService:
         """
         Resize image to specified dimensions
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image resizing")
+            return False
+            
         try:
             with Image.open(input_path) as img:
                 original_width, original_height = img.size
@@ -120,6 +161,10 @@ class ImageService:
         """
         Crop image to specified rectangle
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image cropping")
+            return False
+            
         try:
             with Image.open(input_path) as img:
                 # Define crop box (left, top, right, bottom)
@@ -143,37 +188,43 @@ class ImageService:
         """
         Remove background from image using AI
         """
-        try:
-            if self.bg_removal_session is None:
-                # Fallback: simple background removal using OpenCV
-                return await self._simple_background_removal(input_path, output_path)
-            
-            # Read input image
-            with open(input_path, 'rb') as input_file:
-                input_data = input_file.read()
-            
-            # Remove background
-            output_data = remove(input_data, session=self.bg_removal_session)
-            
-            # Save output
-            with open(output_path, 'wb') as output_file:
-                output_file.write(output_data)
-            
-            # Clean up input file
-            if os.path.exists(input_path):
-                os.remove(input_path)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error removing background: {str(e)}")
-            # Try simple fallback
+        if self.rembg_available and self.bg_removal_session is not None:
+            try:
+                # Read input image
+                with open(input_path, 'rb') as input_file:
+                    input_data = input_file.read()
+                
+                # Remove background
+                output_data = remove(input_data, session=self.bg_removal_session)
+                
+                # Save output
+                with open(output_path, 'wb') as output_file:
+                    output_file.write(output_data)
+                
+                # Clean up input file
+                if os.path.exists(input_path):
+                    os.remove(input_path)
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Error removing background: {str(e)}")
+        
+        # Fallback: simple background removal using OpenCV
+        if self.cv2_available:
             return await self._simple_background_removal(input_path, output_path)
+        else:
+            logger.error("Background removal not available - no suitable libraries found")
+            return False
     
     async def _simple_background_removal(self, input_path: str, output_path: str) -> bool:
         """
         Simple background removal fallback using OpenCV
         """
+        if not self.cv2_available:
+            logger.error("OpenCV not available for background removal")
+            return False
+            
         try:
             # Read image
             img = cv2.imread(input_path)
@@ -223,6 +274,10 @@ class ImageService:
         """
         Compress image to reduce file size
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image compression")
+            return False
+            
         try:
             with Image.open(input_path) as img:
                 # Resize if max dimensions specified
@@ -267,6 +322,10 @@ class ImageService:
         """
         Rotate image by specified angle
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image rotation")
+            return False
+            
         try:
             with Image.open(input_path) as img:
                 # Rotate image
@@ -295,6 +354,10 @@ class ImageService:
         """
         Enhance image with various adjustments
         """
+        if not self.pil_available:
+            logger.error("PIL not available for image enhancement")
+            return False
+            
         try:
             with Image.open(input_path) as img:
                 # Apply enhancements
@@ -337,6 +400,10 @@ class ImageService:
         """
         Add text watermark to image
         """
+        if not self.pil_available:
+            logger.error("PIL not available for watermarking")
+            return False
+            
         try:
             from PIL import ImageDraw, ImageFont
             
