@@ -1,4 +1,4 @@
-# Zenetia Zap - Universal File Converter API
+# Zap by Zenetia
 
 Zenetia Zap is a comprehensive all-in-one file conversion API service built with FastAPI. It supports PDF, audio, video, and image processing with a modern, scalable architecture.
 
