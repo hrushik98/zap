@@ -8,6 +8,7 @@ from typing import List, Optional
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from pdf2docx import Converter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -100,22 +101,17 @@ class PDFService:
     
     async def pdf_to_word(self, input_path: str, output_path: str) -> bool:
         """
-        Convert PDF to Word document (placeholder implementation)
+        Convert PDF to Word document using pdf2docx
         """
         try:
-            # This is a placeholder implementation
-            # In a real application, you would use libraries like:
-            # - pdf2docx
-            # - pdfplumber + python-docx
-            # - Adobe PDF Services API
+            # Use pdf2docx for high-quality conversion
+            cv = Converter(input_path)
+            cv.convert(output_path, start=0, end=None)
+            cv.close()
             
-            # For demo purposes, create a basic DOCX file
-            from docx import Document
-            
-            doc = Document()
-            doc.add_paragraph("This is a placeholder for PDF to Word conversion.")
-            doc.add_paragraph("Original PDF has been processed.")
-            doc.save(output_path)
+            # Verify the output file was created
+            if not os.path.exists(output_path):
+                raise Exception("Output file was not created")
             
             # Clean up input file
             if os.path.exists(input_path):
@@ -125,7 +121,31 @@ class PDFService:
             
         except Exception as e:
             logger.error(f"Error converting PDF to Word: {str(e)}")
-            return False
+            # Fallback to basic implementation if pdf2docx fails
+            try:
+                from docx import Document
+                
+                # Extract text using PyPDF2 as fallback
+                reader = PdfReader(input_path)
+                doc = Document()
+                
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text.strip():
+                        doc.add_paragraph(text)
+                
+                doc.save(output_path)
+                
+                # Clean up input file
+                if os.path.exists(input_path):
+                    os.remove(input_path)
+                
+                logger.info("Used fallback method for PDF to Word conversion")
+                return True
+                
+            except Exception as fallback_error:
+                logger.error(f"Error in fallback PDF to Word conversion: {str(fallback_error)}")
+                return False
     
     async def add_watermark(self, input_path: str, output_path: str, watermark_text: str) -> bool:
         """

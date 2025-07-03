@@ -1,62 +1,67 @@
 # Core FastAPI Dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-pydantic==2.5.0
-pydantic-settings==2.1.0
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
 
 # Database & Authentication
-sqlalchemy==2.0.23
-alembic==1.12.1
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-decouple==3.8
+sqlalchemy
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+python-decouple
+# Clerk Authentication
+pyjwt
+cryptography
 
 # File Processing Libraries
 # PDF Processing
-PyPDF2==3.0.1
-reportlab==4.0.7
-pdf2image==1.16.3
-pypdf==3.17.1
+PyPDF2
+reportlab
+pdf2image
+pypdf
+# Enhanced PDF to Word conversion
+pdf2docx
 
 # Image Processing
-Pillow==10.1.0
-opencv-python==4.8.1.78
-rembg==2.0.56
-pytesseract==0.3.10
+Pillow
+opencv-python
+rembg
+pytesseract
 
 # Audio Processing
-pydub==0.25.1
-librosa==0.10.1
-soundfile==0.12.1
-ffmpeg-python==0.2.0
+pydub
+librosa
+soundfile
+ffmpeg-python
 
 # Video Processing
-moviepy==1.0.3
+moviepy
 
 # Document Processing
-python-docx==1.1.0
-openpyxl==3.1.2
-python-pptx==0.6.22
+python-docx
+openpyxl
+python-pptx
 
 # Web Scraping (for YouTube downloads)
-yt-dlp==2023.11.16
+yt-dlp
 
 # Utilities
-aiofiles==23.2.0
-python-magic==0.4.27
-requests==2.31.0
-celery==5.3.4
-redis==5.0.1
+aiofiles
+python-magic
+requests
+celery
+redis
 
 # Development
-pytest==7.4.3
-pytest-asyncio==0.21.1
-black==23.11.0
-flake8==6.1.0
+pytest
+pytest-asyncio
+black
+flake8
 
 # Cloud Storage (optional)
-boto3==1.34.0
+boto3
 
 # Monitoring
-prometheus-client==0.19.0
+prometheus-client

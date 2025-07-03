@@ -2,9 +2,9 @@
 PDF Hub APIs - PDF processing endpoints
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import FileResponse
-from typing import List
+from typing import List, Dict, Any
 import uuid
 import os
 from pathlib import Path
@@ -15,6 +15,7 @@ from app.models.schemas import (
 )
 from app.core.config import settings
 from app.services.pdf_service import PDFService
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 pdf_service = PDFService()
@@ -22,10 +23,12 @@ pdf_service = PDFService()
 @router.post("/merge", response_model=ConversionResponse)
 async def merge_pdfs(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(..., description="PDF files to merge")
+    files: List[UploadFile] = File(..., description="PDF files to merge"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Merge multiple PDF files into a single PDF
+    Requires authentication
     """
     try:
         # Validate all files are PDFs
@@ -70,7 +73,8 @@ async def merge_pdfs(
                 status="completed",
                 progress=100,
                 download_url=f"/api/v1/core/download/{conversion_id}",
-                file_info=file_info
+                file_info=file_info,
+                user_id=current_user["id"]
             )
         else:
             raise HTTPException(status_code=500, detail="Failed to merge PDFs")
@@ -82,10 +86,12 @@ async def merge_pdfs(
 async def split_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to split"),
-    pages: str = None  # Comma-separated page numbers or ranges like "1,3,5-10"
+    pages: str = None,  # Comma-separated page numbers or ranges like "1,3,5-10"
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Split a PDF file by specified pages or ranges
+    Requires authentication
     """
     try:
         # Validate PDF file
@@ -125,7 +131,8 @@ async def split_pdf(
                 conversion_id=conversion_id,
                 status="completed",
                 progress=100,
-                download_url=f"/api/v1/core/download/{conversion_id}"
+                download_url=f"/api/v1/core/download/{conversion_id}",
+                user_id=current_user["id"]
             )
         else:
             raise HTTPException(status_code=500, detail="Failed to split PDF")
@@ -137,10 +144,12 @@ async def split_pdf(
 async def compress_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to compress"),
-    quality: int = 80
+    quality: int = 80,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Compress a PDF file to reduce file size
+    Requires authentication
     """
     try:
         # Validate PDF file
@@ -187,7 +196,8 @@ async def compress_pdf(
                 status="completed",
                 progress=100,
                 download_url=f"/api/v1/core/download/{conversion_id}",
-                file_info=file_info
+                file_info=file_info,
+                user_id=current_user["id"]
             )
         else:
             raise HTTPException(status_code=500, detail="Failed to compress PDF")
@@ -198,10 +208,12 @@ async def compress_pdf(
 @router.post("/to-word", response_model=ConversionResponse)
 async def pdf_to_word(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="PDF file to convert to Word")
+    file: UploadFile = File(..., description="PDF file to convert to Word"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Convert PDF to Word (DOCX) format
+    Requires authentication
     """
     try:
         # Validate PDF file
@@ -221,7 +233,7 @@ async def pdf_to_word(
         output_filename = f"converted_{conversion_id}.docx"
         output_path = os.path.join(settings.OUTPUT_DIR, output_filename)
         
-        # Perform conversion (placeholder - would need actual implementation)
+        # Perform conversion
         success = await pdf_service.pdf_to_word(input_path, output_path)
         
         if success:
@@ -240,7 +252,8 @@ async def pdf_to_word(
                 status="completed",
                 progress=100,
                 download_url=f"/api/v1/core/download/{conversion_id}",
-                file_info=file_info
+                file_info=file_info,
+                user_id=current_user["id"]
             )
         else:
             raise HTTPException(status_code=500, detail="Failed to convert PDF to Word")

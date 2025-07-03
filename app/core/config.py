@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # API settings
     API_V1_STR: str = "/api/v1"
     
+    # Clerk Authentication
+    CLERK_PUBLISHABLE_KEY: Optional[str] = None
+    CLERK_SECRET_KEY: Optional[str] = None
+    CLERK_JWT_VERIFY_ISSUER: str = "https://evident-termite-94.clerk.accounts.dev"
+    CLERK_JWKS_URL: str = "https://evident-termite-94.clerk.accounts.dev/.well-known/jwks.json"
+    
     # File settings
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     UPLOAD_DIR: str = "./uploads"
@@ -47,6 +53,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra environment variables
 
 # Create settings instance
 settings = Settings()

@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Menu, X, Sparkles, Zap } from "lucide-react"
+import { Menu, X, Sparkles, Zap, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { UserButton } from "@clerk/nextjs"
 
 const sidebarItems = [
   { label: "PDF Hub", id: "pdf", emoji: "🗂️" },
@@ -76,24 +77,39 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </nav>
 
         {/* Profile Section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
+        <div className="mt-auto p-4 border-t border-white/10">
           <button
             onClick={() => {
               onTabChange("profile")
               setIsOpen(false)
             }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group mb-3 ${
               activeTab === "profile"
                 ? "bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border border-violet-500/30 text-white"
                 : "hover:bg-white/5 text-gray-300 hover:text-white"
             }`}
           >
-            <span className="text-xl">👤</span>
+            <User className="w-5 h-5" />
             <span className="font-medium">Profile</span>
             {activeTab === "profile" && (
               <div className="ml-auto w-2 h-2 bg-gradient-to-r from-violet-400 to-cyan-400 rounded-full animate-pulse" />
             )}
           </button>
+          
+          {/* Clerk User Button */}
+          <div className="flex items-center justify-center">
+            <UserButton 
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: "w-10 h-10 border-2 border-violet-400/50 hover:border-violet-400",
+                  userButtonPopoverCard: "bg-slate-800/95 backdrop-blur-xl border-white/10",
+                  userButtonPopoverActionButton: "text-gray-300 hover:text-white hover:bg-white/10",
+                  userButtonPopoverActionButtonText: "text-gray-300",
+                }
+              }}
+            />
+          </div>
         </div>
       </div>
 

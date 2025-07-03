@@ -13,6 +13,16 @@ from pathlib import Path
 BASE_URL = "http://localhost:8000"
 API_BASE = f"{BASE_URL}/api/v1"
 
+# Note: In a real application, you would get this token from Clerk's frontend SDK
+# This is just for demonstration purposes
+CLERK_JWT_TOKEN = "your_clerk_jwt_token_here"
+
+# Headers with authentication
+HEADERS = {
+    "Authorization": f"Bearer {CLERK_JWT_TOKEN}",
+    "Content-Type": "application/json"
+}
+
 def print_response(response, title="Response"):
     """Pretty print API response"""
     print(f"\n--- {title} ---")
@@ -118,37 +128,138 @@ def demo_user_registration():
     response = requests.post(f"{API_BASE}/auth/register", json=user_data)
     print_response(response, "User Registration")
 
-def main():
-    """Run all demonstrations"""
-    print("🚀 Zenetia Zap API Demonstration")
-    print("=" * 50)
+def test_auth_endpoints():
+    """Test authentication endpoints"""
+    print("🔐 Testing Authentication Endpoints...")
+    
+    # Test token verification
+    try:
+        response = requests.post(f"{API_BASE}/auth/verify", headers=HEADERS)
+        print(f"Token verification: {response.status_code}")
+        if response.status_code == 200:
+            print(f"Response: {response.json()}")
+    except Exception as e:
+        print(f"Auth test failed: {e}")
+    
+    # Test user profile
+    try:
+        response = requests.get(f"{API_BASE}/auth/me", headers=HEADERS)
+        print(f"User profile: {response.status_code}")
+        if response.status_code == 200:
+            print(f"User: {response.json()}")
+    except Exception as e:
+        print(f"Profile test failed: {e}")
+
+def test_pdf_merge():
+    """Test PDF merging functionality"""
+    print("\n📄 Testing PDF Merge...")
+    
+    # Create sample PDF files (in a real scenario, you'd have actual PDF files)
+    files = [
+        ("files", ("sample1.pdf", b"dummy pdf content 1", "application/pdf")),
+        ("files", ("sample2.pdf", b"dummy pdf content 2", "application/pdf"))
+    ]
     
     try:
-        # Test basic endpoints
-        demo_health_check()
-        demo_core_endpoints()
-        
-        # Test authentication
-        token = demo_authentication()
-        
-        # Test file operations
-        demo_file_upload()
-        demo_file_validation()
-        
-        # Test user management
-        demo_user_registration()
-        
-        print("\n✅ All API demonstrations completed!")
-        print("\n📖 For full API documentation, visit:")
-        print(f"   {BASE_URL}/docs")
-        print(f"   {BASE_URL}/redoc")
-        
-    except requests.exceptions.ConnectionError:
-        print("❌ Error: Could not connect to the API server.")
-        print("Make sure the server is running at http://localhost:8000")
-        print("Run: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000")
+        response = requests.post(
+            f"{API_BASE}/pdf/merge",
+            files=files,
+            headers={"Authorization": f"Bearer {CLERK_JWT_TOKEN}"}
+        )
+        print(f"PDF Merge: {response.status_code}")
+        if response.status_code == 200:
+            result = response.json()
+            print(f"Conversion ID: {result['conversion_id']}")
+            print(f"Download URL: {result['download_url']}")
     except Exception as e:
-        print(f"❌ Error occurred: {str(e)}")
+        print(f"PDF merge test failed: {e}")
+
+def test_pdf_to_word():
+    """Test PDF to Word conversion"""
+    print("\n📝 Testing PDF to Word Conversion...")
+    
+    files = {
+        "file": ("sample.pdf", b"dummy pdf content", "application/pdf")
+    }
+    
+    try:
+        response = requests.post(
+            f"{API_BASE}/pdf/to-word",
+            files=files,
+            headers={"Authorization": f"Bearer {CLERK_JWT_TOKEN}"}
+        )
+        print(f"PDF to Word: {response.status_code}")
+        if response.status_code == 200:
+            result = response.json()
+            print(f"Conversion ID: {result['conversion_id']}")
+            print(f"Download URL: {result['download_url']}")
+            print(f"User ID: {result.get('user_id')}")
+    except Exception as e:
+        print(f"PDF to Word test failed: {e}")
+
+def test_system_health():
+    """Test system health endpoints"""
+    print("\n🏥 Testing System Health...")
+    
+    # Test main health endpoint
+    try:
+        response = requests.get(f"{API_BASE}/core/health")
+        print(f"System Health: {response.status_code}")
+        if response.status_code == 200:
+            print(f"System: {response.json()['status']}")
+    except Exception as e:
+        print(f"System health test failed: {e}")
+    
+    # Test auth health endpoint
+    try:
+        response = requests.get(f"{API_BASE}/auth/health")
+        print(f"Auth Health: {response.status_code}")
+        if response.status_code == 200:
+            health = response.json()
+            print(f"Auth: {health['status']}")
+            print(f"Clerk Integration: {health['clerk_integration']}")
+    except Exception as e:
+        print(f"Auth health test failed: {e}")
+
+def main():
+    """Main demo function"""
+    print("🚀 Zenetia Zap API Demo with Clerk Authentication")
+    print("=" * 50)
+    
+    print("\n⚠️  IMPORTANT SETUP NOTES:")
+    print("1. Make sure to create a .env file with your Clerk credentials")
+    print("2. Update CLERK_JWT_TOKEN in this script with a real token from Clerk")
+    print("3. Start the FastAPI server: uvicorn app.main:app --reload")
+    print("4. Install dependencies: pip install -r requirements.txt")
+    
+    # Test if server is running
+    try:
+        response = requests.get(f"{API_BASE}/core/health")
+        if response.status_code != 200:
+            print("\n❌ Server is not running or not healthy!")
+            return
+    except Exception as e:
+        print(f"\n❌ Cannot connect to server: {e}")
+        print("Make sure the server is running on http://localhost:8000")
+        return
+    
+    print("\n✅ Server is running!")
+    
+    # Run tests
+    test_system_health()
+    
+    if CLERK_JWT_TOKEN == "your_clerk_jwt_token_here":
+        print("\n⚠️  Skipping authenticated tests - please set a real Clerk JWT token")
+        print("To get a token:")
+        print("1. Sign in to your Clerk-enabled frontend")
+        print("2. Use Clerk's session.getToken() method")
+        print("3. Update CLERK_JWT_TOKEN in this script")
+    else:
+        test_auth_endpoints()
+        test_pdf_merge()
+        test_pdf_to_word()
+    
+    print("\n✅ Demo completed!")
 
 if __name__ == "__main__":
     main() 

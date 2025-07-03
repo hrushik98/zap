@@ -81,6 +81,7 @@ class ConversionResponse(BaseResponse):
     progress: int = 0
     download_url: Optional[str] = None
     file_info: Optional[FileInfo] = None
+    user_id: Optional[str] = None
 
 class ConversionProgress(BaseModel):
     conversion_id: str

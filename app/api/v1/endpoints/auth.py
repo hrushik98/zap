@@ -1,259 +1,94 @@
 """
-Authentication APIs - User authentication and management
+Authentication APIs - Clerk integration for user authentication
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Dict, Any
-import uuid
-from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+import logging
 
-from app.models.schemas import (
-    UserCreate, UserResponse, Token, BaseResponse
-)
+from app.models.schemas import UserResponse, BaseResponse
 from app.core.config import settings
+from app.services.clerk_auth import clerk_auth_service
 
 router = APIRouter()
 security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
-# In-memory storage for demo purposes - use database in production
-users_storage: Dict[str, Dict] = {}
-tokens_storage: Dict[str, Dict] = {}
-
-# Demo admin user
-DEMO_ADMIN = {
-    "id": "admin-001",
-    "email": "admin@zenetia.com",
-    "password": "admin123",  # In production, this should be hashed
-    "full_name": "Admin User",
-    "is_active": True,
-    "created_at": datetime.now()
-}
-
-users_storage["admin@zenetia.com"] = DEMO_ADMIN
-
-def create_access_token(user_id: str) -> str:
-    """Create access token for user"""
-    token = str(uuid.uuid4())
-    tokens_storage[token] = {
-        "user_id": user_id,
-        "created_at": datetime.now(),
-        "expires_at": datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    }
-    return token
-
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
-    """Get current authenticated user"""
-    token = credentials.credentials
-    
-    if token not in tokens_storage:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
-        )
-    
-    token_info = tokens_storage[token]
-    if datetime.now() > token_info["expires_at"]:
-        del tokens_storage[token]
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    
-    user_id = token_info["user_id"]
-    user = next((u for u in users_storage.values() if u["id"] == user_id), None)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-    
-    return user
-
-@router.post("/register", response_model=UserResponse)
-async def register_user(user_data: UserCreate):
-    """
-    Register a new user
-    """
-    try:
-        # Check if user already exists
-        if user_data.email in users_storage:
-            raise HTTPException(
-                status_code=400,
-                detail="User with this email already exists"
-            )
-        
-        # Create new user
-        user_id = str(uuid.uuid4())
-        new_user = {
-            "id": user_id,
-            "email": user_data.email,
-            "password": user_data.password,  # In production, hash this password
-            "full_name": user_data.full_name,
-            "is_active": True,
-            "created_at": datetime.now()
-        }
-        
-        users_storage[user_data.email] = new_user
-        
-        return UserResponse(
-            id=user_id,
-            email=user_data.email,
-            full_name=user_data.full_name,
-            is_active=True,
-            created_at=new_user["created_at"]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/login", response_model=Token)
-async def login(email: str, password: str):
-    """
-    Authenticate user and return access token
-    """
-    try:
-        # Find user
-        if email not in users_storage:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password"
-            )
-        
-        user = users_storage[email]
-        
-        # Check password (in production, use proper password hashing)
-        if user["password"] != password:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password"
-            )
-        
-        # Check if user is active
-        if not user["is_active"]:
-            raise HTTPException(
-                status_code=401,
-                detail="User account is disabled"
-            )
-        
-        # Create access token
-        access_token = create_access_token(user["id"])
-        
-        return Token(
-            access_token=access_token,
-            token_type="bearer"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/logout", response_model=BaseResponse)
-async def logout(current_user: Dict = Depends(get_current_user), credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Logout user and invalidate token
-    """
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """Get current authenticated user from Clerk JWT token"""
     try:
         token = credentials.credentials
-        
-        if token in tokens_storage:
-            del tokens_storage[token]
-        
-        return BaseResponse(
-            success=True,
-            message="Successfully logged out"
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/profile", response_model=UserResponse)
-async def get_user_profile(current_user: Dict = Depends(get_current_user)):
-    """
-    Get current user's profile
-    """
-    try:
-        return UserResponse(
-            id=current_user["id"],
-            email=current_user["email"],
-            full_name=current_user.get("full_name"),
-            is_active=current_user["is_active"],
-            created_at=current_user["created_at"]
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/profile", response_model=UserResponse)
-async def update_user_profile(
-    full_name: str = None,
-    current_user: Dict = Depends(get_current_user)
-):
-    """
-    Update current user's profile
-    """
-    try:
-        # Update user data
-        if full_name is not None:
-            current_user["full_name"] = full_name
-        
-        # Update in storage
-        users_storage[current_user["email"]] = current_user
-        
-        return UserResponse(
-            id=current_user["id"],
-            email=current_user["email"],
-            full_name=current_user.get("full_name"),
-            is_active=current_user["is_active"],
-            created_at=current_user["created_at"]
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/users", response_model=list)
-async def list_users(current_user: Dict = Depends(get_current_user)):
-    """
-    List all users (admin only)
-    """
-    try:
-        # Check if user is admin
-        if current_user["email"] != "admin@zenetia.com":
-            raise HTTPException(
-                status_code=403,
-                detail="Access forbidden. Admin privileges required."
-            )
-        
-        users_list = []
-        for user in users_storage.values():
-            users_list.append(UserResponse(
-                id=user["id"],
-                email=user["email"],
-                full_name=user.get("full_name"),
-                is_active=user["is_active"],
-                created_at=user["created_at"]
-            ))
-        
-        return users_list
-        
+        user_info = await clerk_auth_service.get_user_from_token(token)
+        return user_info
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
+        )
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_profile(current_user: Dict = Depends(get_current_user)):
+    """
+    Get current authenticated user's profile from Clerk
+    """
+    try:
+        return UserResponse(
+            id=current_user["id"],
+            email=current_user.get("email", ""),
+            full_name=current_user.get("full_name", ""),
+            is_active=current_user.get("is_active", True),
+            created_at=None  # Clerk doesn't provide created_at in JWT, would need separate API call
+        )
+    except Exception as e:
+        logger.error(f"Failed to get user profile: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/usage-limits")
+@router.post("/verify", response_model=BaseResponse)
+async def verify_token(current_user: Dict = Depends(get_current_user)):
+    """
+    Verify if the provided token is valid
+    """
+    try:
+        return BaseResponse(
+            success=True,
+            message=f"Token is valid for user: {current_user.get('email', current_user.get('id'))}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/session")
+async def get_session_info(current_user: Dict = Depends(get_current_user)):
+    """
+    Get current session information
+    """
+    try:
+        return {
+            "user_id": current_user["id"],
+            "session_id": current_user.get("session_id"),
+            "email": current_user.get("email"),
+            "issued_at": current_user.get("issued_at"),
+            "expires_at": current_user.get("expires_at"),
+            "is_authenticated": True
+        }
+    except Exception as e:
+        logger.error(f"Failed to get session info: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/user-limits")
 async def get_user_usage_limits(current_user: Dict = Depends(get_current_user)):
     """
     Get user's usage limits and current usage
     """
     try:
         # For demo purposes, return static limits
-        # In production, this would be based on user's subscription plan
+        # In production, this would be based on user's subscription plan from Clerk metadata
         return {
+            "user_id": current_user["id"],
+            "email": current_user.get("email"),
             "max_file_size_mb": settings.MAX_FILE_SIZE / (1024 * 1024),
             "daily_conversions_limit": 100,
             "daily_conversions_used": 0,  # Would be calculated from database
@@ -261,12 +96,72 @@ async def get_user_usage_limits(current_user: Dict = Depends(get_current_user)):
             "monthly_storage_used_gb": 0,  # Would be calculated from database
             "supported_features": [
                 "pdf_conversion",
+                "pdf_merge",
+                "pdf_split",
+                "pdf_compress",
+                "pdf_to_word",
                 "image_processing", 
                 "audio_conversion",
                 "video_processing",
                 "batch_processing"
             ]
         }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.error(f"Failed to get user limits: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/health")
+async def auth_health_check():
+    """
+    Authentication service health check
+    """
+    try:
+        # Test JWKS endpoint availability
+        await clerk_auth_service.get_jwks()
+        
+        return {
+            "status": "healthy",
+            "clerk_integration": "active",
+            "jwks_url": settings.CLERK_JWKS_URL,
+            "audience": settings.CLERK_JWT_VERIFY_AUDIENCE,
+            "issuer": settings.CLERK_JWT_VERIFY_ISSUER
+        }
+    except Exception as e:
+        logger.error(f"Auth health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unhealthy"
+        )
+
+# Legacy endpoints for compatibility (these would redirect to Clerk in frontend)
+@router.post("/login", deprecated=True)
+async def login_redirect():
+    """
+    Redirect to Clerk sign-in (legacy endpoint)
+    """
+    return {
+        "message": "Please use Clerk authentication",
+        "sign_in_url": f"{settings.CLERK_JWT_VERIFY_AUDIENCE}/sign-in",
+        "note": "This endpoint is deprecated. Use Clerk's authentication flow instead."
+    }
+
+@router.post("/register", deprecated=True)
+async def register_redirect():
+    """
+    Redirect to Clerk sign-up (legacy endpoint)
+    """
+    return {
+        "message": "Please use Clerk authentication",
+        "sign_up_url": f"{settings.CLERK_JWT_VERIFY_AUDIENCE}/sign-up",
+        "note": "This endpoint is deprecated. Use Clerk's authentication flow instead."
+    }
+
+@router.post("/logout", deprecated=True)
+async def logout_redirect():
+    """
+    Logout would be handled by Clerk (legacy endpoint)
+    """
+    return {
+        "message": "Logout is handled by Clerk on the frontend",
+        "note": "This endpoint is deprecated. Use Clerk's signOut() method in your frontend."
+    } 

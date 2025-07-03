@@ -1,37 +1,35 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs"
 import { Sidebar } from "./components/sidebar"
 import { Homepage } from "./components/homepage"
 import { PDFHub } from "./components/pdf-hub"
 import { AudioStudio } from "./components/audio-studio"
 import { VideoLab } from "./components/video-lab"
 import { ImageWorkshop } from "./components/image-workshop"
-import { Login } from "./components/login"
-
-// Add this Profile component after the ImageWorkshop import
-function Profile() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 p-8 md:ml-72">
-      <div className="text-center py-20">
-        <div className="text-6xl mb-4">👤</div>
-        <h1 className="text-4xl font-bold text-white mb-4">Profile</h1>
-        <p className="text-gray-400">Manage your account and preferences</p>
-      </div>
-    </div>
-  )
-}
+import { Profile } from "./components/profile"
+import { ClerkSignIn } from "./components/clerk-signin"
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard")
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { isSignedIn, isLoaded } = useAuth()
 
-  const handleLogin = () => {
-    setIsLoggedIn(true)
+  // Loading state while Clerk initializes
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
-  if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />
+  // Show sign-in component if user is not authenticated
+  if (!isSignedIn) {
+    return <ClerkSignIn />
   }
 
   const renderContent = () => {
