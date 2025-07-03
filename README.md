@@ -1,6 +1,6 @@
-# Zenetia Zap 📱
+# Zap by Zenetia
 
-A powerful multi-format file conversion API built with FastAPI, featuring Clerk authentication and comprehensive file processing capabilities.
+Zenetia Zap is a comprehensive all-in-one file conversion API service built with FastAPI. It supports PDF, audio, video, and image processing with a modern, scalable architecture.
 
 ## 🌟 Features
 
