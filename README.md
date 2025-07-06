@@ -11,7 +11,6 @@ Zenetia Zap is a comprehensive all-in-one file conversion API service built with
 - **Video Processing**: Format conversion, compression, trimming, GIF creation
 
 ### Authentication & Security
-- **Clerk Integration**: Secure JWT-based authentication
 - **User Management**: Profile management and session handling
 - **Rate Limiting**: Usage limits and quota management
 
@@ -25,8 +24,6 @@ Zenetia Zap is a comprehensive all-in-one file conversion API service built with
 
 ### Prerequisites
 - Python 3.10
-- Clerk account and application
-- Redis (optional, for task queuing)
 
 ### Installation
 
