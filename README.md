@@ -24,7 +24,7 @@ Zenetia Zap is a comprehensive all-in-one file conversion API service built with
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10
 - Clerk account and application
 - Redis (optional, for task queuing)
 
