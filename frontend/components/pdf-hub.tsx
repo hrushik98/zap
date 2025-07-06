@@ -1,322 +1,426 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { Upload, FileText, Download, Scissors, Archive, FileIcon, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useApiClient } from "@/lib/api"
-import { useDropzone } from "react-dropzone"
+import type React from "react"
 
-interface ConversionResult {
-  success: boolean
-  message: string
-  conversion_id: string
-  download_url: string
-  file_info?: {
-    filename: string
-    size: number
-    format: string
-  }
-}
+import { useState, useRef } from "react"
+import {
+  FileText,
+  Upload,
+  Download,
+  Merge,
+  Split,
+  Lock,
+  FilePenLineIcon as Signature,
+  FileArchiveIcon as Compress,
+  Eye,
+  Plus,
+  X,
+  Loader2,
+  ImageIcon,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ApiClient } from "@/lib/api"
+
+const pdfTools = [
+  {
+    icon: FileText,
+    title: "Extract Text",
+    desc: "Extract text content from PDF files",
+    color: "from-blue-500 to-cyan-500",
+    time: "~10 sec",
+    type: "extract-text"
+  },
+  {
+    icon: ImageIcon,
+    title: "OCR Image",
+    desc: "Extract text from images using OCR",
+    color: "from-green-500 to-emerald-500", 
+    time: "~15 sec",
+    type: "ocr"
+  },
+  {
+    icon: Lock,
+    title: "Password Protect",
+    desc: "Secure your PDFs with encryption",
+    color: "from-red-500 to-pink-500",
+    time: "~15 sec",
+    type: "encrypt"
+  },
+  {
+    icon: FileText,
+    title: "DOCX to PDF",
+    desc: "Convert Word documents to PDF",
+    color: "from-orange-500 to-red-500",
+    time: "~20 sec",
+    type: "docx-to-pdf"
+  },
+  {
+    icon: Merge,
+    title: "Merge PDFs",
+    desc: "Combine multiple PDFs into one",
+    color: "from-purple-500 to-pink-500",
+    time: "~30 sec",
+    type: "merge"
+  },
+  {
+    icon: Split,
+    title: "Split PDF",
+    desc: "Split PDF into individual pages",
+    color: "from-indigo-500 to-purple-500",
+    time: "~20 sec",
+    type: "split"
+  },
+  {
+    icon: Compress,
+    title: "Compress PDF",
+    desc: "Reduce file size without losing quality",
+    color: "from-yellow-500 to-orange-500",
+    time: "~25 sec",
+    type: "compress"
+  },
+]
 
 export function PDFHub() {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [isConverting, setIsConverting] = useState(false)
-  const [conversionResult, setConversionResult] = useState<ConversionResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [activeOperation, setActiveOperation] = useState<'merge' | 'split' | 'compress' | 'to-word' | null>(null)
-  
-  const apiClient = useApiClient()
+  const [selectedTool, setSelectedTool] = useState(pdfTools[0])
+  const [dragActive, setDragActive] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+  const [processing, setProcessing] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [password, setPassword] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const pdfFiles = acceptedFiles.filter(file => file.type === 'application/pdf')
-    setSelectedFiles(pdfFiles)
-    setError(null)
-    setConversionResult(null)
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/pdf': ['.pdf']
-    },
-    multiple: true
-  })
-
-  const handleOperation = async (operation: 'merge' | 'split' | 'compress' | 'to-word') => {
-    if (selectedFiles.length === 0) {
-      setError('Please select PDF files first')
-      return
-    }
-
-    if (operation !== 'merge' && selectedFiles.length > 1) {
-      setError(`${operation} operation only supports single file`)
-      return
-    }
-
-    setIsConverting(true)
-    setError(null)
-    setActiveOperation(operation)
-
-    try {
-      let result: ConversionResult
-
-      switch (operation) {
-        case 'merge':
-          if (selectedFiles.length < 2) {
-            throw new Error('Merge operation requires at least 2 files')
-          }
-          result = await apiClient.mergePDFs(selectedFiles)
-          break
-        
-        case 'to-word':
-          result = await apiClient.pdfToWord(selectedFiles[0])
-          break
-        
-        case 'split':
-          // For now, split all pages (could add UI for specific pages later)
-          result = await apiClient.splitPDF(selectedFiles[0])
-          break
-        
-        case 'compress':
-          // Using default quality of 80 (could add UI for quality selection later)
-          result = await apiClient.compressPDF(selectedFiles[0], 80)
-          break
-        
-        default:
-          throw new Error('Unknown operation')
-      }
-
-      setConversionResult(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Operation failed')
-    } finally {
-      setIsConverting(false)
-      setActiveOperation(null)
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
     }
   }
 
-  const handleDownload = async () => {
-    if (conversionResult?.download_url) {
-      try {
-        // The download URL is relative to the API base, so we need to construct the full URL
-        const fullUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}${conversionResult.download_url}`
-        
-        // Get the token and fetch with authentication
-        const token = await apiClient.getToken()
-        const response = await fetch(fullUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        })
-        
-        if (!response.ok) throw new Error('Download failed')
-        
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = conversionResult.file_info?.filename || 'converted-file.pdf'
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } catch (err) {
-        setError('Download failed')
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    setUploadedFiles(files)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files)
+      setUploadedFiles(files)
+    }
+  }
+
+  const processFiles = async () => {
+    if (uploadedFiles.length === 0) return
+
+    setProcessing(true)
+    setResult(null)
+
+    try {
+      switch (selectedTool.type) {
+        case "extract-text":
+          if (uploadedFiles[0]) {
+            const result = await ApiClient.extractTextFromPdf(uploadedFiles[0])
+            setResult(result)
+          }
+          break
+
+        case "ocr":
+          if (uploadedFiles[0]) {
+            const result = await ApiClient.ocrImage(uploadedFiles[0])
+            setResult(result)
+          }
+          break
+
+        case "encrypt":
+          if (uploadedFiles[0] && password) {
+            const response = await ApiClient.encryptPdf(uploadedFiles[0], password)
+            await ApiClient.downloadFile(response, `encrypted_${uploadedFiles[0].name}`)
+            setResult({ success: true, message: "PDF encrypted and downloaded successfully" })
+          } else {
+            alert("Please provide a password for encryption")
+            return
+          }
+          break
+
+        case "docx-to-pdf":
+          if (uploadedFiles[0]) {
+            const response = await ApiClient.convertDocxToPdf(uploadedFiles[0])
+            await ApiClient.downloadFile(response, uploadedFiles[0].name.replace('.docx', '.pdf'))
+            setResult({ success: true, message: "DOCX converted to PDF and downloaded successfully" })
+          }
+          break
+
+        case "merge":
+          if (uploadedFiles.length >= 2) {
+            const response = await ApiClient.mergePdfs(uploadedFiles)
+            await ApiClient.downloadFile(response, "merged_document.pdf")
+            setResult({ success: true, message: "PDFs merged and downloaded successfully" })
+          } else {
+            alert("Please upload at least 2 PDF files to merge")
+            return
+          }
+          break
+
+        case "split":
+          if (uploadedFiles[0]) {
+            const result = await ApiClient.splitPdf(uploadedFiles[0])
+            setResult(result)
+          }
+          break
+
+        case "compress":
+          if (uploadedFiles[0]) {
+            const response = await ApiClient.compressPdf(uploadedFiles[0])
+            await ApiClient.downloadFile(response, `compressed_${uploadedFiles[0].name}`)
+            setResult({ success: true, message: "PDF compressed and downloaded successfully" })
+          }
+          break
       }
+    } catch (error: any) {
+      setResult({ success: false, error: error.message })
+    } finally {
+      setProcessing(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-violet-900 p-8 md:ml-72">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="p-8 md:ml-72">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
-              <FileText className="w-8 h-8 text-white" />
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-orange-500 rounded-xl flex items-center justify-center">
+              <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-white">PDF Hub 📄</h1>
-              <p className="text-purple-200">All your PDF needs in one place</p>
+              <h1 className="text-3xl font-bold text-white">PDF Hub 🗂️</h1>
+              <p className="text-gray-400">All your PDF needs in one place</p>
             </div>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Tool Selection */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Panel - Tool Selection */}
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white mb-6">Choose Your Tool</h2>
-            
-            <div className="grid grid-cols-2 gap-4">
-              {/* Merge PDFs */}
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 transition-all">
-                <div className="flex items-center gap-3 mb-3">
-                  <FileIcon className="w-8 h-8 text-blue-400" />
-                  <h3 className="text-xl font-semibold text-white">Merge PDFs</h3>
-                </div>
-                <p className="text-gray-300 text-sm mb-4">Combine multiple PDFs into one</p>
-                <span className="text-blue-300 text-xs">~30 sec</span>
-                <Button
-                  onClick={() => handleOperation('merge')}
-                  disabled={isConverting || selectedFiles.length < 2}
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
-                >
-                  {isConverting && activeOperation === 'merge' ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Merge PDFs
-                </Button>
-              </div>
+            <h2 className="text-xl font-semibold text-white mb-4">Choose Your Tool</h2>
 
-              {/* Split PDF */}
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 transition-all">
-                <div className="flex items-center gap-3 mb-3">
-                  <Scissors className="w-8 h-8 text-green-400" />
-                  <h3 className="text-xl font-semibold text-white">Split PDF</h3>
-                </div>
-                <p className="text-gray-300 text-sm mb-4">Extract pages or split into multiple files</p>
-                <span className="text-green-300 text-xs">~20 sec</span>
-                <Button
-                  onClick={() => handleOperation('split')}
-                  disabled={isConverting || selectedFiles.length !== 1}
-                  className="w-full mt-4 bg-green-600 hover:bg-green-700"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {pdfTools.map((tool, index) => (
+                <div
+                  key={index}
+                  onClick={() => setSelectedTool(tool)}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                    selectedTool.title === tool.title
+                      ? "bg-white/10 border-violet-500/50 ring-2 ring-violet-500/30"
+                      : "bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10"
+                  }`}
                 >
-                  {isConverting && activeOperation === 'split' ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Split PDF
-                </Button>
-              </div>
-
-              {/* PDF to Word */}
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 transition-all">
-                <div className="flex items-center gap-3 mb-3">
-                  <FileText className="w-8 h-8 text-orange-400" />
-                  <h3 className="text-xl font-semibold text-white">PDF to Word</h3>
+                  <div
+                    className={`w-10 h-10 bg-gradient-to-r ${tool.color} rounded-lg flex items-center justify-center mb-3`}
+                  >
+                    <tool.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-white font-medium mb-1">{tool.title}</h3>
+                  <p className="text-sm text-gray-400 mb-2">{tool.desc}</p>
+                  <span className="text-xs text-violet-400">{tool.time}</span>
                 </div>
-                <p className="text-gray-300 text-sm mb-4">Convert PDF to editable Word document</p>
-                <span className="text-orange-300 text-xs">~45 sec</span>
-                <Button
-                  onClick={() => handleOperation('to-word')}
-                  disabled={isConverting || selectedFiles.length !== 1}
-                  className="w-full mt-4 bg-orange-600 hover:bg-orange-700"
-                >
-                  {isConverting && activeOperation === 'to-word' ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Convert to Word
-                </Button>
-              </div>
-
-              {/* Compress PDF */}
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 transition-all">
-                <div className="flex items-center gap-3 mb-3">
-                  <Archive className="w-8 h-8 text-red-400" />
-                  <h3 className="text-xl font-semibold text-white">Compress PDF</h3>
-                </div>
-                <p className="text-gray-300 text-sm mb-4">Reduce file size without losing quality</p>
-                <span className="text-red-300 text-xs">~25 sec</span>
-                <Button
-                  onClick={() => handleOperation('compress')}
-                  disabled={isConverting || selectedFiles.length !== 1}
-                  className="w-full mt-4 bg-red-600 hover:bg-red-700"
-                >
-                  {isConverting && activeOperation === 'compress' ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Compress PDF
-                </Button>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* File Upload & Results */}
+          {/* Right Panel - Work Area */}
           <div className="space-y-6">
-            {/* File Upload */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-8">
-              <h3 className="text-xl font-semibold text-white mb-4">Upload PDFs</h3>
-              
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-                  isDragActive 
-                    ? 'border-orange-400 bg-orange-400/10' 
-                    : 'border-white/20 hover:border-orange-400/50 hover:bg-orange-400/5'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <Upload className="w-12 h-12 text-orange-400 mx-auto mb-4" />
-                <p className="text-white mb-2">Drop your PDF files here</p>
-                <p className="text-gray-400 text-sm">or click to browse your files</p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">{selectedTool.title}</h2>
+              <div className={`px-3 py-1 rounded-full text-xs bg-gradient-to-r ${selectedTool.color} text-white`}>
+                {selectedTool.time}
               </div>
+            </div>
 
-              {/* Selected Files */}
-              {selectedFiles.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <h4 className="text-white font-medium">Selected Files:</h4>
-                  {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-white/5 rounded-lg p-2">
-                      <FileText className="w-4 h-4 text-orange-400" />
+            {/* Drag and Drop Zone */}
+            <div
+              className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
+                dragActive ? "border-violet-500 bg-violet-500/10" : "border-white/20 hover:border-white/40"
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="space-y-4">
+                <div
+                  className={`w-16 h-16 mx-auto bg-gradient-to-r ${selectedTool.color} rounded-2xl flex items-center justify-center`}
+                >
+                  <Upload className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-white mb-2">
+                    Drop your {selectedTool.type === 'ocr' ? 'image' : selectedTool.type === 'docx-to-pdf' ? 'DOCX' : 'PDF'} files here
+                  </p>
+                  <p className="text-gray-400 mb-4">or click to browse your files</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    multiple={selectedTool.type === 'merge'}
+                    accept={
+                      selectedTool.type === 'ocr' ? 'image/*' :
+                      selectedTool.type === 'docx-to-pdf' ? '.docx' :
+                      '.pdf'
+                    }
+                    className="hidden"
+                  />
+                  <Button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Choose Files
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Password Input for Encryption */}
+            {selectedTool.type === 'encrypt' && (
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <label className="text-white font-medium mb-2 block">Password for Encryption</label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="bg-white/10 border-white/20 text-white placeholder-white/60"
+                />
+              </div>
+            )}
+
+            {/* Uploaded Files */}
+            {uploadedFiles.length > 0 && (
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <h3 className="text-white font-medium mb-3">Uploaded Files</h3>
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                      <FileText className="w-4 h-4 text-violet-400" />
                       <span className="text-white text-sm flex-1">{file.name}</span>
-                      <span className="text-gray-400 text-xs">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </span>
+                      <span className="text-gray-400 text-xs">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setUploadedFiles((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
 
-            {/* Results */}
-            {conversionResult && (
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
-                <h3 className="text-xl font-semibold text-white mb-4">✅ Conversion Complete</h3>
-                <p className="text-gray-300 mb-4">{conversionResult.message}</p>
-                
-                {conversionResult.file_info && (
-                  <div className="bg-white/5 rounded-lg p-4 mb-4">
-                    <p className="text-white font-medium">{conversionResult.file_info.filename}</p>
-                    <p className="text-gray-400 text-sm">
-                      Size: {(conversionResult.file_info.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
-                )}
-                
-                <Button
-                  onClick={handleDownload}
-                  className="w-full bg-green-600 hover:bg-green-700"
+                <Button 
+                  onClick={processFiles}
+                  disabled={processing}
+                  className="w-full mt-4 bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 disabled:opacity-50"
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Result
+                  {processing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      Process Files ⚡
+                    </>
+                  )}
                 </Button>
               </div>
             )}
 
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-                <p className="text-red-400">{error}</p>
-              </div>
-            )}
-
-            {/* Live Preview placeholder */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
+            {/* Results Area */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                <h3 className="text-white font-medium">Live Preview</h3>
+                <Eye className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-white font-medium">Results</h3>
               </div>
-              
-              {selectedFiles.length > 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-16 h-16 text-orange-400 mx-auto mb-4" />
-                  <p className="text-gray-300">
-                    {selectedFiles.length} PDF file{selectedFiles.length > 1 ? 's' : ''} ready for processing
+              <div className="min-h-[200px] bg-white/10 rounded-lg p-4">
+                {result ? (
+                  <div className="space-y-4">
+                    {result.success ? (
+                      <div className="text-green-400 font-medium">✅ Success!</div>
+                    ) : (
+                      <div className="text-red-400 font-medium">❌ Error!</div>
+                    )}
+                    
+                    {result.message && (
+                      <p className="text-white">{result.message}</p>
+                    )}
+                    
+                    {result.error && (
+                      <p className="text-red-400">{result.error}</p>
+                    )}
+                    
+                    {result.full_text && (
+                      <div>
+                        <h4 className="text-white font-medium mb-2">Extracted Text:</h4>
+                        <div className="bg-black/20 rounded p-3 max-h-64 overflow-y-auto">
+                          <pre className="text-gray-300 text-sm whitespace-pre-wrap">{result.full_text}</pre>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {result.extracted_text && (
+                      <div>
+                        <h4 className="text-white font-medium mb-2">OCR Result:</h4>
+                        <div className="bg-black/20 rounded p-3 max-h-64 overflow-y-auto">
+                          <pre className="text-gray-300 text-sm whitespace-pre-wrap">{result.extracted_text}</pre>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {result.files && (
+                      <div>
+                        <h4 className="text-white font-medium mb-2">Split Result:</h4>
+                        <p className="text-gray-300">{result.message}</p>
+                        <p className="text-gray-400 text-sm">Files created: {result.files.join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-center mt-20">Process files to see results here</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Conversions */}
+        <div className="mt-12 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
+          <h3 className="text-white font-medium mb-4">Recent PDF Conversions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { name: "contract.pdf", action: "Merged", time: "2 min ago" },
+              { name: "report.pdf", action: "Compressed", time: "5 min ago" },
+              { name: "invoice.pdf", action: "Signed", time: "12 min ago" },
+            ].map((item, index) => (
+              <div key={index} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                <FileText className="w-8 h-8 text-orange-400" />
+                <div className="flex-1">
+                  <p className="text-white text-sm font-medium">{item.name}</p>
+                  <p className="text-gray-400 text-xs">
+                    {item.action} • {item.time}
                   </p>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-400">Upload files to see preview</p>
-                </div>
-              )}
-            </div>
+                <Button size="sm" variant="ghost">
+                  <Download className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
       </div>
