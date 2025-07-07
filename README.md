@@ -39,15 +39,6 @@ pip install -r requirements.txt
 ```
 
 3. **Set up environment variables**
-Create a `.env` file in the root directory:
-```env
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key
-CLERK_SECRET_KEY=sk_test_your_secret_key
-CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key
-CLERK_JWT_VERIFY_AUDIENCE=https://your-clerk-domain.clerk.accounts.dev
-CLERK_JWT_VERIFY_ISSUER=https://your-clerk-domain.clerk.accounts.dev
-CLERK_JWKS_URL=https://your-clerk-domain.clerk.accounts.dev/.well-known/jwks.json
 
 # Application Settings
 DEBUG=True
