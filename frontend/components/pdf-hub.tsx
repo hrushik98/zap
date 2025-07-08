@@ -1059,19 +1059,6 @@ export function PDFHub() {
                     </p>
                   </div>
                   <div className="flex gap-1">
-                    {/* Preview button - shows for entries with file data */}
-                    {item.data?.fileData && (
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => handleRecentConversionPreview(item)}
-                        title="Preview file"
-                        className="h-8 w-8 p-0 text-gray-400 hover:text-blue-400"
-                      >
-                        <Search className="w-4 h-4" />
-                      </Button>
-                    )}
-                    
                     {/* Download button - unified functionality for all entries */}
                     <Button 
                       size="sm" 
