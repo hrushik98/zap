@@ -114,6 +114,14 @@ export function PDFHub() {
   const [recentConversions, setRecentConversions] = useState<RecentConversion[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Clear results when switching tools
+  useEffect(() => {
+    setResult(null)
+    setUploadedFiles([])
+    setPassword("")
+    setCopiedText(false)
+  }, [selectedTool.type])
+
   // Load recent conversions from localStorage on component mount
   useEffect(() => {
     const loadRecentConversions = () => {
@@ -342,13 +350,46 @@ export function PDFHub() {
     setDragActive(false)
 
     const files = Array.from(e.dataTransfer.files)
-    setUploadedFiles(files)
+    
+    if (selectedTool.type === 'merge') {
+      // For merge tool, add new files to existing ones (upload separately)
+      setUploadedFiles(prev => {
+        const newFiles = files.filter(newFile => 
+          !prev.some(existingFile => 
+            existingFile.name === newFile.name && existingFile.size === newFile.size
+          )
+        )
+        return [...prev, ...newFiles]
+      })
+    } else {
+      // For other tools, replace existing files
+      setUploadedFiles(files)
+    }
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files)
-      setUploadedFiles(files)
+      
+      if (selectedTool.type === 'merge') {
+        // For merge tool, add new files to existing ones (upload separately)
+        setUploadedFiles(prev => {
+          const newFiles = files.filter(newFile => 
+            !prev.some(existingFile => 
+              existingFile.name === newFile.name && existingFile.size === newFile.size
+            )
+          )
+          return [...prev, ...newFiles]
+        })
+      } else {
+        // For other tools, replace existing files
+        setUploadedFiles(files)
+      }
+    }
+    
+    // Reset the input value so the same file can be selected again if needed
+    if (e.target) {
+      e.target.value = ''
     }
   }
 
@@ -500,7 +541,7 @@ export function PDFHub() {
         case "merge":
           if (uploadedFiles.length >= 2) {
             const response = await ApiClient.mergePdfs(uploadedFiles)
-            const fileName = "merged_document.pdf"
+            const fileName = `merged_${uploadedFiles.length}_files.pdf`
             
             // Clone response BEFORE consuming it
             const downloadResponse = response.clone()
@@ -512,10 +553,17 @@ export function PDFHub() {
             // Download the file immediately using the cloned response
             await ApiClient.downloadFile(downloadResponse, fileName)
             
-            setResult({ success: true, message: "PDFs merged and downloaded successfully" })
+            setResult({ 
+              success: true, 
+              message: `Successfully merged ${uploadedFiles.length} PDF files and downloaded as "${fileName}"`,
+              mergeInfo: {
+                totalFiles: uploadedFiles.length,
+                fileNames: uploadedFiles.map(f => f.name)
+              }
+            })
             saveRecentConversion(
               fileName, 
-              "Merged", 
+              `Merged ${uploadedFiles.length} files`, 
               "merge",
               {
                 fileData: base64Data,
@@ -524,7 +572,10 @@ export function PDFHub() {
               }
             )
           } else {
-            alert("Please upload at least 2 PDF files to merge")
+            setResult({ 
+              success: false, 
+              error: `Cannot merge: Only ${uploadedFiles.length} file${uploadedFiles.length !== 1 ? 's' : ''} uploaded. Please upload at least 2 PDF files.` 
+            })
             return
           }
           break
@@ -674,14 +725,15 @@ export function PDFHub() {
                 </div>
                 <div>
                   <p className="text-lg font-medium text-white mb-2">
-                    Drop your {selectedTool.type === 'ocr' ? 'image' : selectedTool.type === 'docx-to-pdf' ? 'DOCX' : 'PDF'} files here
+                    {selectedTool.type === 'merge' ? 'Drop PDF files here one by one to merge' : 
+                     `Drop your ${selectedTool.type === 'ocr' ? 'image' : selectedTool.type === 'docx-to-pdf' ? 'DOCX' : 'PDF'} files here`}
                   </p>
                   <p className="text-gray-400 mb-4">or click to browse your files</p>
                   <input
                     ref={fileInputRef}
                     type="file"
                     onChange={handleFileSelect}
-                    multiple={selectedTool.type === 'merge'}
+                    multiple={false}
                     accept={
                       selectedTool.type === 'ocr' ? 'image/*' :
                       selectedTool.type === 'docx-to-pdf' ? '.docx' :
@@ -694,7 +746,7 @@ export function PDFHub() {
                     className="bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Choose Files
+                    {selectedTool.type === 'merge' ? 'Add PDF File' : 'Choose Files'}
                   </Button>
                 </div>
               </div>
@@ -717,10 +769,24 @@ export function PDFHub() {
             {/* Uploaded Files */}
             {uploadedFiles.length > 0 && (
               <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
-                <h3 className="text-white font-medium mb-3">Uploaded Files</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white font-medium">Uploaded Files</h3>
+                  {selectedTool.type === 'merge' && (
+                    <div className={`text-xs px-2 py-1 rounded-full ${
+                      uploadedFiles.length >= 2 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {uploadedFiles.length >= 2 ? '✓ Ready to merge' : `Need ${2 - uploadedFiles.length} more file${2 - uploadedFiles.length > 1 ? 's' : ''}`}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2">
                   {uploadedFiles.map((file, index) => (
                     <div key={index} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                      {selectedTool.type === 'merge' && (
+                        <span className="text-cyan-400 font-mono text-xs w-6">{index + 1}.</span>
+                      )}
                       <FileText className="w-4 h-4 text-violet-400" />
                       <span className="text-white text-sm flex-1">{file.name}</span>
                       <span className="text-gray-400 text-xs">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
@@ -728,6 +794,7 @@ export function PDFHub() {
                         size="sm"
                         variant="ghost"
                         onClick={() => setUploadedFiles((prev) => prev.filter((_, i) => i !== index))}
+                        title="Remove file"
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -735,15 +802,52 @@ export function PDFHub() {
                   ))}
                 </div>
 
+                {/* Add More Files button for merge mode */}
+                {selectedTool.type === 'merge' && (
+                  <div className="flex gap-2 mt-3">
+                    <Button 
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 border-violet-500/50 text-violet-400 hover:bg-violet-500/10"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add More PDF Files
+                    </Button>
+                    <Button 
+                      onClick={() => setUploadedFiles([])}
+                      variant="outline"
+                      size="sm"
+                      className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                      title="Clear all files"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Validation message for merge */}
+                {selectedTool.type === 'merge' && uploadedFiles.length < 2 && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-4">
+                    <p className="text-red-300 text-sm">
+                      ⚠️ Please upload at least 2 PDF files to merge them together
+                    </p>
+                  </div>
+                )}
+
                 <Button 
                   onClick={processFiles}
-                  disabled={processing}
+                  disabled={processing || (selectedTool.type === 'merge' && uploadedFiles.length < 2)}
                   className="w-full mt-4 bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 disabled:opacity-50"
                 >
                   {processing ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Processing...
+                    </>
+                  ) : selectedTool.type === 'merge' && uploadedFiles.length < 2 ? (
+                    <>
+                      Upload More Files ({uploadedFiles.length}/2)
                     </>
                   ) : (
                     <>
@@ -758,7 +862,10 @@ export function PDFHub() {
             <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Eye className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-white font-medium">Results</h3>
+                <h3 className="text-white font-medium">Results - {selectedTool.title}</h3>
+                <div className="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded-full ml-2">
+                  {selectedTool.type}
+                </div>
               </div>
               <div className="min-h-[200px] bg-white/10 rounded-lg p-4">
                 {result ? (
@@ -882,9 +989,41 @@ export function PDFHub() {
                         <p className="text-gray-400 text-sm">Files created: {result.files.join(', ')}</p>
                       </div>
                     )}
+                    
+                    {result.mergeInfo && (
+                      <div>
+                        <h4 className="text-white font-medium mb-2">Merge Details:</h4>
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                          <p className="text-green-300 text-sm mb-2">
+                            📎 Successfully merged {result.mergeInfo.totalFiles} PDF files
+                          </p>
+                          <div className="space-y-1">
+                            <p className="text-gray-300 text-xs font-medium">Files merged (in order):</p>
+                            {result.mergeInfo.fileNames.map((fileName: string, index: number) => (
+                              <div key={index} className="flex items-center gap-2 text-xs">
+                                <span className="text-cyan-400 font-mono">{index + 1}.</span>
+                                <span className="text-gray-300">{fileName}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-center mt-20">Process files to see results here</p>
+                  <div className="text-center mt-16">
+                    <div className="w-12 h-12 bg-gray-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <selectedTool.icon className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <p className="text-gray-400 text-lg font-medium mb-1">Ready for {selectedTool.title}</p>
+                    <p className="text-gray-500 text-sm">
+                      {selectedTool.type === 'merge' 
+                        ? 'Upload PDF files one by one, then process to merge them' 
+                        : 'Upload files and process to see results here'
+                      }
+                    </p>
+                    <p className="text-gray-600 text-xs mt-2">Results will clear when switching tools</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -968,6 +1107,8 @@ export function PDFHub() {
             )}
           </div>
         </div>
+
+
       </div>
     </div>
   )
