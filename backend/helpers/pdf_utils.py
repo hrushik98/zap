@@ -9,6 +9,11 @@ from docx2pdf import convert as docx_to_pdf_convert
 from docx import Document
 import tempfile
 import shutil
+try:
+    import pikepdf
+    PIKEPDF_AVAILABLE = True
+except ImportError:
+    PIKEPDF_AVAILABLE = False
 
 # Try to import pytesseract
 try:
@@ -328,4 +333,51 @@ def compress_pdf(input_path: str, output_path: str) -> str:
             shutil.copy2(input_path, output_path)
             return output_path
         except Exception as copy_error:
-            raise Exception(f"Error compressing PDF: {str(e)}. Copy fallback also failed: {str(copy_error)}") 
+            raise Exception(f"Error compressing PDF: {str(e)}. Copy fallback also failed: {str(copy_error)}")
+
+def unlock_pdf(input_path: str, output_path: str, password: str) -> str:
+    """Remove password protection from PDF using pikepdf or PyPDF2 as fallback"""
+    
+    # Try pikepdf first (preferred method)
+    if PIKEPDF_AVAILABLE:
+        try:
+            # Open the password-protected PDF
+            with pikepdf.Pdf.open(input_path, password=password) as pdf:
+                # Save without password protection
+                pdf.save(output_path)
+            
+            return output_path
+        except pikepdf.PasswordError:
+            raise Exception("Invalid password provided for PDF unlock")
+        except pikepdf.PdfError as e:
+            raise Exception(f"PDF processing error: {str(e)}")
+        except Exception as e:
+            # If pikepdf fails, try PyPDF2 fallback
+            pass
+    
+    # Fallback to PyPDF2 method
+    try:
+        reader = PdfReader(input_path)
+        
+        # Check if PDF is encrypted
+        if reader.is_encrypted:
+            # Try to decrypt with password
+            if not reader.decrypt(password):
+                raise Exception("Invalid password provided for PDF unlock")
+        
+        # Create a new PDF without encryption
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+        
+        # Save the unlocked PDF
+        with open(output_path, "wb") as output_file:
+            writer.write(output_file)
+        
+        return output_path
+        
+    except Exception as e:
+        if "Invalid password" in str(e):
+            raise Exception("Invalid password provided for PDF unlock")
+        else:
+            raise Exception(f"Error unlocking PDF: {str(e)}. Note: For best results, install pikepdf using: pip install pikepdf") 

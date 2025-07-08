@@ -214,6 +214,24 @@ export class ApiClient {
     return response
   }
 
+  static async unlockPdf(file: File, password: string): Promise<Response> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('password', password)
+
+    const response = await fetch(`${API_BASE_URL}/api/pdf/unlock`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
   static async downloadFile(response: Response, filename?: string): Promise<void> {
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)

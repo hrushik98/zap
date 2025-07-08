@@ -653,6 +653,38 @@ export function PDFHub() {
             )
           }
           break
+
+        case "unlock":
+          if (uploadedFiles[0] && password) {
+            const response = await ApiClient.unlockPdf(uploadedFiles[0], password)
+            const fileName = `unlocked_${uploadedFiles[0].name}`
+            
+            // Clone response BEFORE consuming it
+            const downloadResponse = response.clone()
+            
+            // Convert response to base64 for localStorage
+            const blob = await response.blob()
+            const base64Data = await blobToBase64(blob)
+            
+            // Download the file immediately using the cloned response
+            await ApiClient.downloadFile(downloadResponse, fileName)
+            
+            setResult({ success: true, message: "PDF unlocked and downloaded successfully" })
+            saveRecentConversion(
+              uploadedFiles[0].name, 
+              "Unlocked", 
+              "unlock",
+              {
+                fileData: base64Data,
+                fileName: fileName,
+                mimeType: 'application/pdf'
+              }
+            )
+          } else {
+            alert("Please provide the password to unlock the PDF")
+            return
+          }
+          break
       }
     } catch (error: any) {
       setResult({ success: false, error: error.message })
@@ -770,15 +802,17 @@ export function PDFHub() {
               </div>
             </div>
 
-            {/* Password Input for Encryption */}
-            {selectedTool.type === 'encrypt' && (
+            {/* Password Input for Encryption and Unlock */}
+            {(selectedTool.type === 'encrypt' || selectedTool.type === 'unlock') && (
               <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
-                <label className="text-white font-medium mb-2 block">Password for Encryption</label>
+                <label className="text-white font-medium mb-2 block">
+                  {selectedTool.type === 'encrypt' ? 'Password for Encryption' : 'PDF Password to Unlock'}
+                </label>
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder={selectedTool.type === 'encrypt' ? 'Enter password' : 'Enter PDF password'}
                   className="bg-white/10 border-white/20 text-white placeholder-white/60"
                 />
               </div>

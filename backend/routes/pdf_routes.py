@@ -13,6 +13,7 @@ from helpers.pdf_utils import (
     merge_pdfs,
     split_pdf,
     compress_pdf,
+    unlock_pdf,
     check_tesseract_installation,
     get_tesseract_download_info,
     setup_tesseract_path,
@@ -375,6 +376,38 @@ async def compress_pdf_endpoint(file: UploadFile = File(...)):
         )
     
     except Exception as e:
+        for path in [input_path, output_path]:
+            if os.path.exists(path):
+                os.remove(path)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/unlock")
+async def unlock_pdf_endpoint(file: UploadFile = File(...), password: str = Form(...)):
+    """Remove password protection from PDF"""
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+    
+    file_id = str(uuid.uuid4())
+    input_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+    output_path = os.path.join(UPLOAD_DIR, f"unlocked_{file_id}_{file.filename}")
+    
+    try:
+        await save_upload_file(file, input_path)
+        
+        # Unlock PDF
+        unlock_pdf(input_path, output_path, password)
+        
+        # Clean up input file
+        os.remove(input_path)
+        
+        return FileResponse(
+            output_path,
+            media_type='application/pdf',
+            filename=f"unlocked_{file.filename}"
+        )
+    
+    except Exception as e:
+        # Clean up on error
         for path in [input_path, output_path]:
             if os.path.exists(path):
                 os.remove(path)
