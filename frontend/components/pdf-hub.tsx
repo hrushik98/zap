@@ -10,6 +10,7 @@ import {
   Merge,
   Split,
   Lock,
+  Unlock,
   FilePenLineIcon as Signature,
   FileArchiveIcon as Compress,
   Eye,
@@ -21,6 +22,7 @@ import {
   Check,
   Trash2,
   Search,
+  Stamp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -82,6 +84,22 @@ const pdfTools = [
     color: "from-yellow-500 to-orange-500",
     time: "~25 sec",
     type: "compress"
+  },
+  {
+    icon: Unlock,
+    title: "Unlock PDF",
+    desc: "Remove PDF password security",
+    color: "from-teal-500 to-cyan-500",
+    time: "~10 sec",
+    type: "unlock"
+  },
+  {
+    icon: Stamp,
+    title: "Watermark",
+    desc: "Stamp an image or text over your PDF",
+    color: "from-rose-500 to-pink-500", 
+    time: "~20 sec",
+    type: "watermark"
   },
 ]
 
