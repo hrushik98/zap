@@ -17,6 +17,8 @@ import {
   X,
   Loader2,
   ImageIcon,
+  Copy,
+  Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -88,6 +90,7 @@ export function PDFHub() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [password, setPassword] = useState("")
+  const [copiedText, setCopiedText] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDrag = (e: React.DragEvent) => {
@@ -187,6 +190,16 @@ export function PDFHub() {
       setResult({ success: false, error: error.message })
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedText(true)
+      setTimeout(() => setCopiedText(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy text: ', err)
     }
   }
 
@@ -367,7 +380,21 @@ export function PDFHub() {
                     
                     {result.full_text && (
                       <div>
-                        <h4 className="text-white font-medium mb-2">Extracted Text:</h4>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-white font-medium">Extracted Text:</h4>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(result.full_text)}
+                            className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                          >
+                            {copiedText ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
                         <div className="bg-black/20 rounded p-3 max-h-64 overflow-y-auto">
                           <pre className="text-gray-300 text-sm whitespace-pre-wrap">{result.full_text}</pre>
                         </div>
@@ -376,7 +403,21 @@ export function PDFHub() {
                     
                     {result.extracted_text && (
                       <div>
-                        <h4 className="text-white font-medium mb-2">OCR Result:</h4>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-white font-medium">OCR Result:</h4>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(result.extracted_text)}
+                            className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                          >
+                            {copiedText ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
                         <div className="bg-black/20 rounded p-3 max-h-64 overflow-y-auto">
                           <pre className="text-gray-300 text-sm whitespace-pre-wrap">{result.extracted_text}</pre>
                         </div>
