@@ -12,7 +12,11 @@ from helpers.pdf_utils import (
     convert_docx_to_pdf,
     merge_pdfs,
     split_pdf,
-    compress_pdf
+    compress_pdf,
+    check_tesseract_installation,
+    get_tesseract_download_info,
+    setup_tesseract_path,
+    PYTESSERACT_AVAILABLE
 )
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF Operations"])
@@ -27,6 +31,31 @@ async def save_upload_file(upload_file: UploadFile, destination: str) -> str:
         content = await upload_file.read()
         await f.write(content)
     return destination
+
+@router.get("/health")
+async def health_check():
+    """Check the health of PDF services and Tesseract OCR installation"""
+    
+    # Check Tesseract installation
+    tesseract_installed, tesseract_path = check_tesseract_installation()
+    
+    health_status = {
+        "pdf_services": "operational",
+        "tesseract_ocr": {
+            "available": PYTESSERACT_AVAILABLE,
+            "installed": tesseract_installed,
+            "path": tesseract_path if tesseract_installed else None,
+            "status": "operational" if (PYTESSERACT_AVAILABLE and tesseract_installed) else "not_available"
+        }
+    }
+    
+    # If Tesseract is not available, provide installation instructions
+    if not (PYTESSERACT_AVAILABLE and tesseract_installed):
+        download_info = get_tesseract_download_info()
+        health_status["tesseract_ocr"]["installation_instructions"] = download_info.get("instructions", [])
+        health_status["tesseract_ocr"]["download_url"] = download_info.get("url", "")
+    
+    return health_status
 
 @router.post("/extract-text")
 async def extract_text_endpoint(file: UploadFile = File(...)):
@@ -63,9 +92,35 @@ async def extract_text_endpoint(file: UploadFile = File(...)):
 
 @router.post("/ocr-image")
 async def ocr_image_endpoint(file: UploadFile = File(...)):
-    """Perform OCR on uploaded image"""
+    """Perform OCR on uploaded image with improved error handling"""
     if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp')):
         raise HTTPException(status_code=400, detail="File must be an image (PNG, JPG, JPEG, TIFF, BMP)")
+    
+    # Check Tesseract availability before processing
+    if not PYTESSERACT_AVAILABLE:
+        download_info = get_tesseract_download_info()
+        raise HTTPException(
+            status_code=503, 
+            detail={
+                "error": "Tesseract OCR is not installed",
+                "message": "Please install Tesseract OCR to use this feature",
+                "installation_instructions": download_info.get("instructions", []),
+                "download_url": download_info.get("url", "")
+            }
+        )
+    
+    tesseract_installed, _ = check_tesseract_installation()
+    if not tesseract_installed:
+        download_info = get_tesseract_download_info()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Tesseract OCR executable not found",
+                "message": "Tesseract OCR is installed but executable not found in system PATH",
+                "installation_instructions": download_info.get("instructions", []),
+                "download_url": download_info.get("url", "")
+            }
+        )
     
     file_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
@@ -82,13 +137,30 @@ async def ocr_image_endpoint(file: UploadFile = File(...)):
         return {
             "success": True,
             "filename": file.filename,
-            "extracted_text": extracted_text
+            "extracted_text": extracted_text,
+            "text_length": len(extracted_text),
+            "has_content": bool(extracted_text and extracted_text.strip())
         }
     
     except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        
+        # Check if it's a Tesseract-specific error
+        error_message = str(e)
+        if "tesseract" in error_message.lower() or "ocr" in error_message.lower():
+            download_info = get_tesseract_download_info()
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "OCR processing failed",
+                    "message": error_message,
+                    "installation_instructions": download_info.get("instructions", []),
+                    "download_url": download_info.get("url", "")
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail=f"Processing error: {error_message}")
 
 @router.post("/encrypt")
 async def encrypt_pdf_endpoint(file: UploadFile = File(...), password: str = Form(...)):

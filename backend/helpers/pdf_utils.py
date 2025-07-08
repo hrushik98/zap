@@ -1,13 +1,100 @@
 import PyPDF2
 import cv2
-import pytesseract
 import os
-from typing import List
+import platform
+import subprocess
+from typing import List, Optional
 from PyPDF2 import PdfReader, PdfWriter
 from docx2pdf import convert as docx_to_pdf_convert
 from docx import Document
 import tempfile
 import shutil
+
+# Try to import pytesseract
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+
+def check_tesseract_installation() -> tuple[bool, Optional[str]]:
+    """Check if Tesseract is properly installed and return path if found"""
+    
+    # Common Tesseract installation paths on Windows
+    common_paths = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        r"C:\Users\{}\AppData\Local\Tesseract-OCR\tesseract.exe".format(os.getenv('USERNAME', '')),
+        r"C:\tesseract\tesseract.exe"
+    ]
+    
+    # First, try to find tesseract in PATH
+    try:
+        result = subprocess.run(['tesseract', '--version'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return True, 'tesseract'  # Found in PATH
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    
+    # Check common installation paths
+    for path in common_paths:
+        if os.path.exists(path):
+            return True, path
+    
+    return False, None
+
+def setup_tesseract_path():
+    """Setup Tesseract path for pytesseract"""
+    if not PYTESSERACT_AVAILABLE:
+        return False
+    
+    is_installed, tesseract_path = check_tesseract_installation()
+    
+    if is_installed and tesseract_path and tesseract_path != 'tesseract':
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        return True
+    elif is_installed:
+        return True
+    
+    return False
+
+def get_tesseract_download_info():
+    """Get download information for Tesseract OCR"""
+    system = platform.system().lower()
+    
+    if system == "windows":
+        return {
+            "url": "https://github.com/UB-Mannheim/tesseract/wiki",
+            "installer": "tesseract-ocr-w64-setup-5.3.3.20231005.exe",
+            "instructions": [
+                "1. Download the Windows installer from: https://github.com/UB-Mannheim/tesseract/wiki",
+                "2. Run the installer as Administrator",
+                "3. Install to the default location: C:\\Program Files\\Tesseract-OCR\\",
+                "4. Add Tesseract to your system PATH, or restart your application",
+                "5. Restart your FastAPI server after installation"
+            ]
+        }
+    elif system == "darwin":  # macOS
+        return {
+            "url": "https://brew.sh/",
+            "command": "brew install tesseract",
+            "instructions": [
+                "1. Install Homebrew if not already installed",
+                "2. Run: brew install tesseract",
+                "3. Restart your FastAPI server"
+            ]
+        }
+    else:  # Linux
+        return {
+            "command": "sudo apt-get install tesseract-ocr",
+            "instructions": [
+                "Ubuntu/Debian: sudo apt-get install tesseract-ocr",
+                "CentOS/RHEL: sudo yum install tesseract",
+                "Arch: sudo pacman -S tesseract",
+                "Restart your FastAPI server after installation"
+            ]
+        }
 
 def extract_text_from_pdf(pdf_path: str) -> List[str]:
     """Extract text from PDF file and return list of page contents"""
@@ -25,21 +112,58 @@ def extract_text_from_pdf(pdf_path: str) -> List[str]:
         raise Exception(f"Error extracting text from PDF: {str(e)}")
 
 def ocr_from_image(image_path: str) -> str:
-    """Perform OCR on image file and return extracted text"""
+    """Perform OCR on image file and return extracted text with proper error handling"""
+    
+    # Check if pytesseract is available
+    if not PYTESSERACT_AVAILABLE:
+        download_info = get_tesseract_download_info()
+        raise Exception(
+            f"Tesseract OCR is not installed. Please install it:\n"
+            f"Instructions: {'; '.join(download_info.get('instructions', []))}"
+        )
+    
+    # Setup Tesseract path
+    tesseract_ready = setup_tesseract_path()
+    if not tesseract_ready:
+        download_info = get_tesseract_download_info()
+        raise Exception(
+            f"Tesseract OCR executable not found. Please install Tesseract OCR:\n"
+            f"Download from: {download_info.get('url', 'Official Tesseract repository')}\n"
+            f"Instructions: {'; '.join(download_info.get('instructions', []))}"
+        )
+    
     try:
         # Read image
         img = cv2.imread(image_path)
         if img is None:
-            raise Exception("Could not read image file")
+            raise Exception("Could not read image file. Supported formats: PNG, JPG, JPEG, TIFF, BMP")
         
         # Preprocess image for better OCR
         img = get_grayscale(img)
         img = thresholding(img)
         img = remove_noise(img)
         
-        # Perform OCR
-        text = pytesseract.image_to_string(img)
-        return text
+        # Perform OCR with better configuration
+        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,!?-'
+        text = pytesseract.image_to_string(img, config=custom_config)
+        
+        if not text or text.strip() == "":
+            # Try with different PSM mode if no text found
+            custom_config = r'--oem 3 --psm 8'
+            text = pytesseract.image_to_string(img, config=custom_config)
+        
+        return text.strip() if text else "No text detected in the image."
+        
+    except pytesseract.TesseractNotFoundError:
+        download_info = get_tesseract_download_info()
+        raise Exception(
+            f"Tesseract executable not found in system PATH. Please:\n"
+            f"1. Install Tesseract OCR: {download_info.get('url', '')}\n"
+            f"2. Add it to your system PATH\n"
+            f"3. Restart the application"
+        )
+    except pytesseract.TesseractError as e:
+        raise Exception(f"Tesseract OCR processing error: {str(e)}")
     except Exception as e:
         raise Exception(f"Error performing OCR: {str(e)}")
 

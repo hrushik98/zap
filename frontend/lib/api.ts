@@ -6,9 +6,49 @@ export interface ApiResponse<T = any> {
   data?: T
 }
 
+export interface TesseractError {
+  error: string
+  message: string
+  installation_instructions: string[]
+  download_url: string
+}
+
+export interface HealthCheckResponse {
+  pdf_services: string
+  tesseract_ocr: {
+    available: boolean
+    installed: boolean
+    path: string | null
+    status: string
+    installation_instructions?: string[]
+    download_url?: string
+  }
+}
+
 export class ApiClient {
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
+      const contentType = response.headers.get('Content-Type')
+      
+      // Handle structured error responses (like OCR errors)
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const errorData = await response.json()
+          // If it's a Tesseract error, throw a structured error
+          if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.error) {
+            const tesseractError = new Error(errorData.detail.message)
+            ;(tesseractError as any).tesseractDetails = errorData.detail
+            throw tesseractError
+          }
+          throw new Error(errorData.detail || `API Error ${response.status}`)
+        } catch (e) {
+          if (e instanceof Error && (e as any).tesseractDetails) {
+            throw e
+          }
+          throw new Error(`API Error ${response.status}`)
+        }
+      }
+      
       const error = await response.text()
       throw new Error(`API Error ${response.status}: ${error}`)
     }
@@ -21,6 +61,14 @@ export class ApiClient {
     
     // For file downloads, return the response itself
     return response as unknown as T
+  }
+
+  static async checkHealth(): Promise<HealthCheckResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/pdf/health`, {
+      method: 'GET',
+    })
+
+    return this.handleResponse(response)
   }
 
   static async extractTextFromPdf(file: File): Promise<{
@@ -45,6 +93,8 @@ export class ApiClient {
     success: boolean
     filename: string
     extracted_text: string
+    text_length: number
+    has_content: boolean
   }> {
     const formData = new FormData()
     formData.append('file', file)
@@ -174,5 +224,13 @@ export class ApiClient {
     a.click()
     window.URL.revokeObjectURL(url)
     document.body.removeChild(a)
+  }
+
+  static isTesseractError(error: Error): boolean {
+    return !!(error as any).tesseractDetails
+  }
+
+  static getTesseractErrorDetails(error: Error): TesseractError | null {
+    return (error as any).tesseractDetails || null
   }
 } 
