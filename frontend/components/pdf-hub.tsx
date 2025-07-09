@@ -47,11 +47,19 @@ const pdfTools = [
   },
   {
     icon: Lock,
-    title: "Password Protect",
+    title: "Lock PDF",
     desc: "Secure your PDFs with encryption",
     color: "from-red-500 to-pink-500",
     time: "~15 sec",
     type: "encrypt"
+  },
+  {
+    icon: Unlock,
+    title: "Unlock PDF",
+    desc: "Remove PDF password security",
+    color: "from-teal-500 to-cyan-500",
+    time: "~10 sec",
+    type: "unlock"
   },
   {
     icon: FileText,
@@ -84,14 +92,6 @@ const pdfTools = [
     color: "from-yellow-500 to-orange-500",
     time: "~25 sec",
     type: "compress"
-  },
-  {
-    icon: Unlock,
-    title: "Unlock PDF",
-    desc: "Remove PDF password security",
-    color: "from-teal-500 to-cyan-500",
-    time: "~10 sec",
-    type: "unlock"
   },
   {
     icon: Stamp,

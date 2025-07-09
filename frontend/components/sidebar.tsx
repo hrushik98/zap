@@ -5,11 +5,11 @@ import { Menu, X, Sparkles, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const sidebarItems = [
+  { label: "My Dashboard", id: "dashboard", emoji: "📊" },
   { label: "PDF Hub", id: "pdf", emoji: "🗂️" },
   { label: "Audio Studio", id: "audio", emoji: "🎵" },
   { label: "Video Lab", id: "video", emoji: "🎬" },
   { label: "Image Workshop", id: "image", emoji: "🖼️" },
-  { label: "My Dashboard", id: "dashboard", emoji: "📊" },
 ]
 
 interface SidebarProps {
