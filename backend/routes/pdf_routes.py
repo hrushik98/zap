@@ -14,6 +14,7 @@ from helpers.pdf_utils import (
     split_pdf,
     compress_pdf,
     unlock_pdf,
+    watermark_pdf,
     check_tesseract_installation,
     get_tesseract_download_info,
     setup_tesseract_path,
@@ -409,6 +410,48 @@ async def unlock_pdf_endpoint(file: UploadFile = File(...), password: str = Form
     except Exception as e:
         # Clean up on error
         for path in [input_path, output_path]:
+            if os.path.exists(path):
+                os.remove(path)
+        raise HTTPException(status_code=500, detail=str(e)) 
+
+@router.post("/watermark")
+async def watermark_pdf_endpoint(
+    template_file: UploadFile = File(...), 
+    watermark_file: UploadFile = File(...)
+):
+    """Add watermark to PDF"""
+    if not template_file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Template file must be a PDF")
+    
+    if not watermark_file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Watermark file must be a PDF")
+    
+    file_id = str(uuid.uuid4())
+    template_path = os.path.join(UPLOAD_DIR, f"{file_id}_template_{template_file.filename}")
+    watermark_path = os.path.join(UPLOAD_DIR, f"{file_id}_watermark_{watermark_file.filename}")
+    output_path = os.path.join(UPLOAD_DIR, f"watermarked_{file_id}_{template_file.filename}")
+    
+    try:
+        # Save both uploaded files
+        await save_upload_file(template_file, template_path)
+        await save_upload_file(watermark_file, watermark_path)
+        
+        # Apply watermark
+        watermark_pdf(template_path, watermark_path, output_path)
+        
+        # Clean up input files
+        os.remove(template_path)
+        os.remove(watermark_path)
+        
+        return FileResponse(
+            output_path,
+            media_type='application/pdf',
+            filename=f"watermarked_{template_file.filename}"
+        )
+    
+    except Exception as e:
+        # Clean up on error
+        for path in [template_path, watermark_path, output_path]:
             if os.path.exists(path):
                 os.remove(path)
         raise HTTPException(status_code=500, detail=str(e)) 

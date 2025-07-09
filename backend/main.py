@@ -34,7 +34,9 @@ async def root():
             "extract_text_docx": "/api/pdf/extract-text-docx",
             "merge": "/api/pdf/merge",
             "split": "/api/pdf/split",
-            "compress": "/api/pdf/compress"
+            "compress": "/api/pdf/compress",
+            "unlock": "/api/pdf/unlock",
+            "watermark": "/api/pdf/watermark"
         }
     }
 

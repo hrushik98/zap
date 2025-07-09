@@ -389,8 +389,8 @@ export function PDFHub() {
     if (e.target.files) {
       const files = Array.from(e.target.files)
       
-      if (selectedTool.type === 'merge') {
-        // For merge tool, add new files to existing ones (upload separately)
+      if (selectedTool.type === 'merge' || selectedTool.type === 'watermark') {
+        // For merge and watermark tools, add new files to existing ones (upload separately)
         setUploadedFiles(prev => {
           const newFiles = files.filter(newFile => 
             !prev.some(existingFile => 
@@ -685,6 +685,48 @@ export function PDFHub() {
             return
           }
           break
+
+        case "watermark":
+          if (uploadedFiles.length >= 2) {
+            const response = await ApiClient.watermarkPdf(uploadedFiles[0], uploadedFiles[1])
+            const fileName = `watermarked_${uploadedFiles[0].name}`
+            
+            // Clone response BEFORE consuming it
+            const downloadResponse = response.clone()
+            
+            // Convert response to base64 for localStorage
+            const blob = await response.blob()
+            const base64Data = await blobToBase64(blob)
+            
+            // Download the file immediately using the cloned response
+            await ApiClient.downloadFile(downloadResponse, fileName)
+            
+            setResult({ 
+              success: true, 
+              message: `Successfully added watermark to "${uploadedFiles[0].name}" and downloaded as "${fileName}"`,
+              watermarkInfo: {
+                templateFile: uploadedFiles[0].name,
+                watermarkFile: uploadedFiles[1].name
+              }
+            })
+            saveRecentConversion(
+              uploadedFiles[0].name, 
+              "Watermarked", 
+              "watermark",
+              {
+                fileData: base64Data,
+                fileName: fileName,
+                mimeType: 'application/pdf'
+              }
+            )
+          } else {
+            setResult({ 
+              success: false, 
+              error: `Cannot add watermark: Only ${uploadedFiles.length} file${uploadedFiles.length !== 1 ? 's' : ''} uploaded. Please upload the template PDF and watermark PDF files.` 
+            })
+            return
+          }
+          break
       }
     } catch (error: any) {
       setResult({ success: false, error: error.message })
@@ -776,6 +818,7 @@ export function PDFHub() {
                 <div>
                   <p className="text-lg font-medium text-white mb-2">
                     {selectedTool.type === 'merge' ? 'Drop PDF files here one by one to merge' : 
+                     selectedTool.type === 'watermark' ? 'Drop template PDF and watermark PDF files here' :
                      `Drop your ${selectedTool.type === 'ocr' ? 'image' : selectedTool.type === 'docx-to-pdf' ? 'DOCX' : 'PDF'} files here`}
                   </p>
                   <p className="text-gray-400 mb-4">or click to browse your files</p>
@@ -796,7 +839,8 @@ export function PDFHub() {
                     className="bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    {selectedTool.type === 'merge' ? 'Add PDF File' : 'Choose Files'}
+                    {selectedTool.type === 'merge' ? 'Add PDF File' : 
+                     selectedTool.type === 'watermark' ? 'Add PDF Files' : 'Choose Files'}
                   </Button>
                 </div>
               </div>
@@ -823,13 +867,15 @@ export function PDFHub() {
               <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-white font-medium">Uploaded Files</h3>
-                  {selectedTool.type === 'merge' && (
+                  {(selectedTool.type === 'merge' || selectedTool.type === 'watermark') && (
                     <div className={`text-xs px-2 py-1 rounded-full ${
                       uploadedFiles.length >= 2 
                         ? 'bg-green-500/20 text-green-400' 
                         : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {uploadedFiles.length >= 2 ? '✓ Ready to merge' : `Need ${2 - uploadedFiles.length} more file${2 - uploadedFiles.length > 1 ? 's' : ''}`}
+                      {uploadedFiles.length >= 2 ? 
+                        (selectedTool.type === 'merge' ? '✓ Ready to merge' : '✓ Ready to watermark') : 
+                        `Need ${2 - uploadedFiles.length} more file${2 - uploadedFiles.length > 1 ? 's' : ''}`}
                     </div>
                   )}
                 </div>
@@ -838,6 +884,11 @@ export function PDFHub() {
                     <div key={index} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
                       {selectedTool.type === 'merge' && (
                         <span className="text-cyan-400 font-mono text-xs w-6">{index + 1}.</span>
+                      )}
+                      {selectedTool.type === 'watermark' && (
+                        <span className="text-cyan-400 font-mono text-xs w-16">
+                          {index === 0 ? 'Template' : index === 1 ? 'Watermark' : `File ${index + 1}`}
+                        </span>
                       )}
                       <FileText className="w-4 h-4 text-violet-400" />
                       <span className="text-white text-sm flex-1">{file.name}</span>
@@ -854,8 +905,8 @@ export function PDFHub() {
                   ))}
                 </div>
 
-                {/* Add More Files button for merge mode */}
-                {selectedTool.type === 'merge' && (
+                {/* Add More Files button for merge and watermark modes */}
+                {(selectedTool.type === 'merge' || selectedTool.type === 'watermark') && (
                   <div className="flex gap-2 mt-3">
                     <Button 
                       onClick={() => fileInputRef.current?.click()}
@@ -864,7 +915,7 @@ export function PDFHub() {
                       className="flex-1 border-violet-500/50 text-violet-400 hover:bg-violet-500/10"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Add More PDF Files
+                      {selectedTool.type === 'merge' ? 'Add More PDF Files' : 'Add PDF Files'}
                     </Button>
                     <Button 
                       onClick={() => setUploadedFiles([])}
@@ -878,7 +929,7 @@ export function PDFHub() {
                   </div>
                 )}
 
-                {/* Validation message for merge */}
+                {/* Validation messages for merge and watermark */}
                 {selectedTool.type === 'merge' && uploadedFiles.length < 2 && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-4">
                     <p className="text-red-300 text-sm">
@@ -886,10 +937,20 @@ export function PDFHub() {
                     </p>
                   </div>
                 )}
+                
+                {selectedTool.type === 'watermark' && uploadedFiles.length < 2 && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-4">
+                    <p className="text-red-300 text-sm">
+                      ⚠️ Please upload 2 PDF files: first the template PDF, then the watermark PDF
+                    </p>
+                  </div>
+                )}
 
                 <Button 
                   onClick={processFiles}
-                  disabled={processing || (selectedTool.type === 'merge' && uploadedFiles.length < 2)}
+                  disabled={processing || 
+                    (selectedTool.type === 'merge' && uploadedFiles.length < 2) ||
+                    (selectedTool.type === 'watermark' && uploadedFiles.length < 2)}
                   className="w-full mt-4 bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 disabled:opacity-50"
                 >
                   {processing ? (
@@ -900,6 +961,10 @@ export function PDFHub() {
                   ) : selectedTool.type === 'merge' && uploadedFiles.length < 2 ? (
                     <>
                       Upload More Files ({uploadedFiles.length}/2)
+                    </>
+                  ) : selectedTool.type === 'watermark' && uploadedFiles.length < 2 ? (
+                    <>
+                      Upload PDF Files ({uploadedFiles.length}/2)
                     </>
                   ) : (
                     <>

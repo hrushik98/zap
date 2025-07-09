@@ -381,3 +381,35 @@ def unlock_pdf(input_path: str, output_path: str, password: str) -> str:
             raise Exception("Invalid password provided for PDF unlock")
         else:
             raise Exception(f"Error unlocking PDF: {str(e)}. Note: For best results, install pikepdf using: pip install pikepdf") 
+
+def watermark_pdf(template_path: str, watermark_path: str, output_path: str) -> str:
+    """Add watermark to PDF using PyPDF2"""
+    try:
+        # Read the template PDF
+        with open(template_path, "rb") as template_file:
+            template = PdfReader(template_file)
+            
+            # Read the watermark PDF  
+            with open(watermark_path, "rb") as watermark_file:
+                watermark = PdfReader(watermark_file)
+                
+                if len(watermark.pages) == 0:
+                    raise Exception("Watermark PDF has no pages")
+                
+                output = PdfWriter()
+                watermark_page = watermark.pages[0]
+                
+                # Loop through all pages and merge watermark
+                for i in range(len(template.pages)):
+                    page = template.pages[i]
+                    page.merge_page(watermark_page)
+                    output.add_page(page)
+                
+                # Write to new PDF
+                with open(output_path, "wb") as output_file:
+                    output.write(output_file)
+                
+                return output_path
+                
+    except Exception as e:
+        raise Exception(f"Error adding watermark to PDF: {str(e)}") 
