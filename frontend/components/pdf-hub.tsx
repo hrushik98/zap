@@ -162,9 +162,16 @@ export function PDFHub() {
     loadRecentConversions()
   }, [])
 
-  // Save recent conversion to localStorage
+  // Save recent conversion to localStorage (metadata only, no fileData)
   const saveRecentConversion = (fileName: string, action: string, type: string, data?: any) => {
     try {
+      // Only keep metadata, never store fileData, fileName, or mimeType in localStorage
+      const metaData = { ...data }
+      if (metaData) {
+        delete metaData.fileData
+        delete metaData.fileName
+        delete metaData.mimeType
+      }
       const newConversion: RecentConversion = {
         id: Date.now().toString(),
         name: fileName,
@@ -172,18 +179,32 @@ export function PDFHub() {
         time: formatTimeAgo(new Date()),
         timestamp: Date.now(),
         type: type,
-        data: data
+        data: metaData && Object.keys(metaData).length > 0 ? metaData : undefined
       }
-
       const stored = localStorage.getItem('recentPdfConversions')
       let conversions: RecentConversion[] = stored ? JSON.parse(stored) : []
-      
-      // Add new conversion to the beginning and keep only the last 10
       conversions.unshift(newConversion)
       conversions = conversions.slice(0, 10)
-      
-      localStorage.setItem('recentPdfConversions', JSON.stringify(conversions))
-      setRecentConversions(conversions)
+      try {
+        localStorage.setItem('recentPdfConversions', JSON.stringify(conversions))
+        setRecentConversions(conversions)
+      } catch (e: any) {
+        if (e.name === 'QuotaExceededError') {
+          // Remove oldest and try again
+          conversions.pop()
+          try {
+            localStorage.setItem('recentPdfConversions', JSON.stringify(conversions))
+            setRecentConversions(conversions)
+          } catch (e2) {
+            // If still fails, clear all and log error
+            localStorage.removeItem('recentPdfConversions')
+            setRecentConversions([])
+            console.error('Recent conversions cleared due to storage quota.');
+          }
+        } else {
+          throw e
+        }
+      }
     } catch (error) {
       console.error('Error saving recent conversion:', error)
     }
@@ -432,12 +453,7 @@ export function PDFHub() {
                   uploadedFiles[0].name, 
                   "Text Extracted", 
                   "extract-text",
-                  { 
-                    extractedText: result.full_text,
-                    fileData: base64Data,
-                    fileName: uploadedFiles[0].name,
-                    mimeType: 'application/pdf'
-                  }
+                  { extractedText: result.full_text }
                 )
               }
               fileReader.readAsDataURL(uploadedFiles[0])
@@ -459,12 +475,7 @@ export function PDFHub() {
                     uploadedFiles[0].name, 
                     "OCR Processed", 
                     "ocr",
-                    { 
-                      extractedText: result.extracted_text,
-                      fileData: base64Data,
-                      fileName: uploadedFiles[0].name,
-                      mimeType: uploadedFiles[0].type
-                    }
+                    { extractedText: result.extracted_text }
                   )
                 }
                 fileReader.readAsDataURL(uploadedFiles[0])
@@ -515,11 +526,7 @@ export function PDFHub() {
               uploadedFiles[0].name, 
               "Encrypted", 
               "encrypt",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           } else {
             alert("Please provide a password for encryption")
@@ -547,11 +554,7 @@ export function PDFHub() {
               uploadedFiles[0].name, 
               "Converted to PDF", 
               "docx-to-pdf",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           }
           break
@@ -583,11 +586,7 @@ export function PDFHub() {
               fileName, 
               `Merged ${uploadedFiles.length} files`, 
               "merge",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           } else {
             setResult({ 
@@ -611,13 +610,7 @@ export function PDFHub() {
                   uploadedFiles[0].name, 
                   "Split", 
                   "split",
-                  { 
-                    files: result.files, 
-                    message: result.message,
-                    fileData: base64Data,
-                    fileName: uploadedFiles[0].name,
-                    mimeType: 'application/pdf'
-                  }
+                  { files: result.files, message: result.message }
                 )
               }
               fileReader.readAsDataURL(uploadedFiles[0])
@@ -645,11 +638,7 @@ export function PDFHub() {
               uploadedFiles[0].name, 
               "Compressed", 
               "compress",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           }
           break
@@ -674,11 +663,7 @@ export function PDFHub() {
               uploadedFiles[0].name, 
               "Unlocked", 
               "unlock",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           } else {
             alert("Please provide the password to unlock the PDF")
@@ -713,11 +698,7 @@ export function PDFHub() {
               uploadedFiles[0].name, 
               "Watermarked", 
               "watermark",
-              {
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'application/pdf'
-              }
+              {}
             )
           } else {
             setResult({ 
