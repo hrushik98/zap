@@ -25,6 +25,33 @@ export interface HealthCheckResponse {
   }
 }
 
+export interface AudioHealthCheckResponse {
+  audio_services: string
+  supported_formats: string[]
+  features: string[]
+}
+
+export interface AudioInfoResponse {
+  success: boolean
+  filename: string
+  audio_info: {
+    duration_ms: number
+    duration_seconds: number
+    channels: number
+    frame_rate: number
+    sample_width: number
+    format: string
+    bitrate: string
+    file_size: number
+  }
+}
+
+export interface AudioFormatsResponse {
+  supported_formats: string[]
+  input_formats: string[]
+  output_formats: string[]
+}
+
 export class ApiClient {
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
@@ -69,6 +96,199 @@ export class ApiClient {
     })
 
     return this.handleResponse(response)
+  }
+
+  // Audio API Methods
+  static async checkAudioHealth(): Promise<AudioHealthCheckResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/audio/health`, {
+      method: 'GET',
+    })
+
+    return this.handleResponse(response)
+  }
+
+  static async getAudioFormats(): Promise<AudioFormatsResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/audio/formats`, {
+      method: 'GET',
+    })
+
+    return this.handleResponse(response)
+  }
+
+  static async getAudioInfo(file: File): Promise<AudioInfoResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/info`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    return this.handleResponse(response)
+  }
+
+  static async trimAudio(file: File, startTime: number, endTime: number): Promise<Response> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('start_time', startTime.toString())
+    formData.append('end_time', endTime.toString())
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/trim`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async convertAudio(file: File, outputFormat: string): Promise<Response> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('output_format', outputFormat)
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/convert`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async adjustVolume(file: File, volumeChange: number): Promise<Response> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('volume_change', volumeChange.toString())
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/volume`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async mergeAudio(files: File[]): Promise<Response> {
+    const formData = new FormData()
+    files.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/merge`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async addAudioEffects(file: File, fadeIn: number, fadeOut: number): Promise<Response> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('fade_in', fadeIn.toString())
+    formData.append('fade_out', fadeOut.toString())
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/effects`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  // Audio Merger specific methods
+  static async generateDemoAudioFiles(): Promise<{
+    success: boolean
+    sine_melody: {
+      file_id: string
+      filename: string
+      details: any
+    }
+    square_tones: {
+      file_id: string
+      filename: string
+      details: any
+    }
+    message: string
+  }> {
+    const response = await fetch(`${API_BASE_URL}/api/audio/generate/demo-files`, {
+      method: 'POST',
+    })
+
+    return this.handleResponse(response)
+  }
+
+  static async downloadGeneratedAudio(fileId: string): Promise<Response> {
+    const response = await fetch(`${API_BASE_URL}/api/audio/download/${fileId}`, {
+      method: 'GET',
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async overlayAudio(files: File[]): Promise<Response> {
+    if (files.length !== 2) {
+      throw new Error('Exactly 2 audio files required for overlay')
+    }
+
+    const formData = new FormData()
+    files.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    const response = await fetch(`${API_BASE_URL}/api/audio/overlay`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
+  }
+
+  static async mergeGeneratedDemo(): Promise<Response> {
+    const response = await fetch(`${API_BASE_URL}/api/audio/merge-generated`, {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error ${response.status}: ${error}`)
+    }
+
+    return response
   }
 
   static async extractTextFromPdf(file: File): Promise<{

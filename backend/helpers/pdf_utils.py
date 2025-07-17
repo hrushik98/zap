@@ -413,3 +413,4 @@ def watermark_pdf(template_path: str, watermark_path: str, output_path: str) -> 
                 
     except Exception as e:
         raise Exception(f"Error adding watermark to PDF: {str(e)}") 
+        
